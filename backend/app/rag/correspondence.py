@@ -1,9 +1,7 @@
 import logging
 import email
-import re
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
-from email.parser import Parser
 from email.policy import default
 from email.utils import parseaddr, parsedate_to_datetime
 import uuid

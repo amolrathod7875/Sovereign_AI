@@ -43,9 +43,22 @@ async def upload_document(file: UploadFile = File(...)):
 @router.post("/ingest")
 async def ingest_document(document_id: str):
     from app.rag.ingest import ingest_document_pipeline
+    from app.rag.correspondence import ingest_correspondence_pipeline
+    from app.storage.postgres import get_document_by_id
 
     try:
-        result = await ingest_document_pipeline(document_id)
+        doc = await get_document_by_id(document_id)
+        filename = doc.filename if doc else f"{document_id}"
+
+        ext = filename.lower().split(".")[-1]
+        is_correspondence = ext in ["eml", "msg", "txt", "md"] or (
+            doc is not None and doc.doc_type == "correspondence"
+        )
+
+        if is_correspondence:
+            result = await ingest_correspondence_pipeline(document_id)
+        else:
+            result = await ingest_document_pipeline(document_id)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

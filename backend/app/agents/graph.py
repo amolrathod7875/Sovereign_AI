@@ -190,6 +190,44 @@ async def execute_step(step_name: str, state: AgentState, events: AgentEvents) -
                 "filename": "approval_note.docx",
             })
 
+        elif step_name in ("gather_context", "generate_answer"):
+            retrieved = await perform_ragRetrieval(state, events)
+            state["retrieved_context"] = retrieved
+            result["metadata"] = {
+                "chunks_found": len(retrieved),
+                "sources": [r.get("document") for r in retrieved[:3]],
+            }
+            for chunk in retrieved[:3]:
+                await events.emit("evidence", {
+                    "source": chunk.get("document", "unknown"),
+                    "page": chunk.get("page"),
+                    "chunk_id": chunk.get("chunk_id"),
+                })
+
+        elif step_name == "generate_document":
+            artifact_id = await generate_docx_artifact(state, events)
+            state["artifacts"].append(artifact_id)
+            result["metadata"] = {"artifact_id": artifact_id, "doc_type": "docx"}
+
+        elif step_name == "generate_presentation":
+            artifact_id = await generate_pptx_artifact(state, events)
+            state["artifacts"].append(artifact_id)
+            result["metadata"] = {"artifact_id": artifact_id, "doc_type": "pptx"}
+
+        elif step_name == "generate_spreadsheet":
+            artifact_id = await generate_xlsx_artifact(state, events)
+            state["artifacts"].append(artifact_id)
+            result["metadata"] = {"artifact_id": artifact_id, "doc_type": "xlsx"}
+
+        elif step_name in ("verify_result", "store_artifact"):
+            result["metadata"] = {"stored": True}
+
+        elif step_name in ("process_image", "analyze_with_vlm"):
+            result["metadata"] = {"vision": state["selected_model"]}
+
+        elif step_name in ("generate_analysis_code", "validate_code", "iterate_review"):
+            result["metadata"] = {"step": step_name, "status": "ok"}
+
         elif step_name == "finalize":
             result["metadata"] = {"finalized": True}
 
@@ -312,4 +350,64 @@ async def generate_docx_artifact(state: AgentState, events: AgentEvents) -> str:
         return artifact_id
     except Exception as e:
         logger.error(f"DOCX generation error: {e}")
+        return artifact_id
+
+
+async def generate_pptx_artifact(state: AgentState, events: AgentEvents) -> str:
+    """
+    Generate a PPTX artifact.
+    """
+    from app.tools.pptx_tool import create_presentation
+    import uuid
+
+    artifact_id = f"art_{uuid.uuid4().hex[:8]}"
+
+    try:
+        title = state.get("message", "Presentation")[:60]
+        slides = [{"title": "Overview", "content": state.get("message", "")}]
+        if state.get("retrieved_context"):
+            for chunk in state["retrieved_context"][:5]:
+                slides.append({
+                    "title": chunk.get("document", "Source"),
+                    "content": chunk.get("text", "")[:300],
+                })
+
+        await create_presentation(artifact_id, title, slides)
+        await events.emit("artifact_created", {
+            "artifact_id": artifact_id,
+            "filename": f"{artifact_id}.pptx",
+        })
+        return artifact_id
+    except Exception as e:
+        logger.error(f"PPTX generation error: {e}")
+        return artifact_id
+
+
+async def generate_xlsx_artifact(state: AgentState, events: AgentEvents) -> str:
+    """
+    Generate an XLSX artifact.
+    """
+    from app.tools.spreadsheet_tool import create_spreadsheet
+    import uuid
+
+    artifact_id = f"art_{uuid.uuid4().hex[:8]}"
+
+    try:
+        data = state.get("retrieved_context", [])
+        rows = [
+            {
+                "source": c.get("document", "unknown"),
+                "text": c.get("text", "")[:200],
+            }
+            for c in data[:20]
+        ] or [{"source": "result", "text": state.get("message", "")}]
+
+        await create_spreadsheet(artifact_id, "Analysis", rows)
+        await events.emit("artifact_created", {
+            "artifact_id": artifact_id,
+            "filename": f"{artifact_id}.xlsx",
+        })
+        return artifact_id
+    except Exception as e:
+        logger.error(f"XLSX generation error: {e}")
         return artifact_id

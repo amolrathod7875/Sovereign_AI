@@ -51,6 +51,12 @@ def classify_task(message: str, attachments: List[str]) -> str:
 
     if any(
         keyword in message_lower
+        for keyword in ["email", "correspondence", "letter", "thread", "sender", "vendor", "negotiat"]
+    ):
+        return TaskType.CORRESPONDENCE_SEARCH
+
+    if any(
+        keyword in message_lower
         for keyword in ["search", "find", "look up", "what does", "how do", "tell me about"]
     ):
         return TaskType.RAG_QA
@@ -116,6 +122,48 @@ def create_plan(task_type: str, message: str) -> List[str]:
             "select_model",
             "gather_context",
             "generate_document",
+            "finalize",
+        ],
+        TaskType.CORRESPONDENCE_SEARCH: [
+            "validate_inputs",
+            "classify_task",
+            "select_model",
+            "hybrid_retrieval",
+            "analyze_and_reason",
+            "finalize",
+        ],
+        TaskType.PRESENTATION_GENERATION: [
+            "validate_inputs",
+            "classify_task",
+            "select_model",
+            "gather_context",
+            "generate_presentation",
+            "finalize",
+        ],
+        TaskType.SPREADSHEET_WORK: [
+            "validate_inputs",
+            "classify_task",
+            "select_model",
+            "gather_context",
+            "generate_spreadsheet",
+            "finalize",
+        ],
+        TaskType.CALCULATION: [
+            "validate_inputs",
+            "classify_task",
+            "select_model",
+            "generate_code",
+            "execute_in_sandbox",
+            "verify_result",
+            "finalize",
+        ],
+        TaskType.ITERATIVE_REVIEW: [
+            "validate_inputs",
+            "classify_task",
+            "select_model",
+            "hybrid_retrieval",
+            "analyze_and_reason",
+            "iterate_review",
             "finalize",
         ],
     }
