@@ -1,0 +1,77 @@
+# Sovereign AI Docker Compose - CPU Only (No GPU)
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    networks:
+      - sovereign-ai
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - qdrant
+      - piston
+    environment:
+      - APP_ENV=local
+      - SOVEREIGN_MODE=true
+      - POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/sovereign_ai
+      - QDRANT_URL=http://qdrant:6333
+      - VLLM_GENERAL_URL=http://vllm-general:8000/v1
+      - VLLM_CODER_URL=http://vllm-coder:8000/v1
+      - VLLM_VISION_URL=http://vllm-vision:8000/v1
+      - PISTON_URL=http://piston:2000
+      - ARTIFACT_DIR=/data/artifacts
+      - UPLOAD_DIR=/data/uploads
+    volumes:
+      - artifact-data:/data/artifacts
+      - upload-data:/data/uploads
+    networks:
+      - sovereign-ai
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=sovereign_ai
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - sovereign-ai
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - sovereign-ai
+
+  piston:
+    image: ghcr.io/engineerd/piston:latest
+    ports:
+      - "2000:2000"
+    networks:
+      - sovereign-ai
+
+volumes:
+  postgres-data:
+  qdrant-data:
+  artifact-data:
+  upload-data:
+
+networks:
+  sovereign-ai:
+    driver: bridge
