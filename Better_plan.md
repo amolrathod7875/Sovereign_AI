@@ -32,10 +32,10 @@ The system must:
 | Frontend | Lovable + React + TypeScript + Tailwind + shadcn/ui | |
 | Backend API | Python + FastAPI + Pydantic | |
 | Agent orchestration | LangGraph | Stateful workflows, planning, tool calls, retries |
-| Model serving | vLLM | HTTP/OpenAI-compatible APIs |
-| General LLM | Small local Qwen instruct-class model | General reasoning, summarization, tool decisions |
-| Coding LLM | Qwen2.5-Coder-3B-Instruct | Code generation, debugging, data-analysis scripts |
-| Vision model | Small local Qwen-VL/VLM-class model | Images, scanned pages, engineering drawings |
+| Model serving | **llama.cpp / llama-cpp-python** (GGUF-native, OpenAI-compatible server) | Serves `.gguf` weights over an OpenAI-compatible HTTP API |
+| General LLM | Small local Qwen instruct-class GGUF | General reasoning, summarization, tool decisions |
+| Coding LLM | **Qwen2.5-Coder-3B-Instruct Q4_K_M GGUF** (downloaded, 2.1 GB) | Code generation, debugging, data-analysis scripts |
+| Vision model | Small local Qwen2.5-VL-class GGUF | Images, scanned pages, engineering drawings |
 | Embeddings | BGE/E5 family, local | Dense semantic retrieval |
 | Sparse retrieval | BM25 | Exact identifiers, SOP codes, part numbers |
 | Fusion | Reciprocal Rank Fusion (RRF) | Combines dense and sparse rankings |
@@ -50,6 +50,14 @@ The system must:
 | Containers | Docker + Docker Compose | Repeatable local deployment |
 
 **Change:** Added `python-pptx` to office generation layer.
+
+**Change (model serving):** Switched the model-serving layer from vLLM to **llama.cpp / llama-cpp-python**, because the available weights are **GGUF** files (e.g. the downloaded `qwen2.5-coder-3b-instruct-q4_k_m.gguf`, 2.1 GB). llama.cpp serves GGUF over an OpenAI-compatible API, so the existing `openai`/LangChain-OpenAI clients keep working unchanged — only the endpoint URLs and the quantization story change (GGUF instead of AWQ). This also fits the 6 GB RTX 4050: a single 3B Q4_K_M GGUF (~2.1 GB) is the right size class.
+
+**Downloaded model (in-repo):** `models/qwen-coder/qwen2.5-coder-3b-instruct-q4_k_m.gguf`
+- Format: GGUF, quantization **Q4_K_M**, size **2.1 GB**
+- Role: **Coding LLM** (CODING / DATA_ANALYSIS / CALCULATION task classes)
+- Served via a llama-cpp server container that mounts `./models` and loads this file.
+- Note: Qwen2.5-Coder-Instruct is an instruct model, so it can also cover light GENERAL_QA when no separate general GGUF is loaded (saves VRAM on the 6 GB GPU). A dedicated small general GGUF and a **Qwen2.5-VL 3B GGUF** for the multimodal demo are still to be obtained (see Section 2.1 + Section 17).
 
 ---
 
@@ -118,8 +126,8 @@ USER
 |    |      |      |          (sandboxed code)
 +----+------+------+ 
      |
-     v
-LOCAL MODEL SERVING (vLLM)
+      v
+LOCAL MODEL SERVING (llama.cpp / GGUF)
 
 RAG PATH:
 Document
@@ -572,6 +580,7 @@ services:
       - postgres
       - qdrant
       - piston
+      - llama-coder        # primary served model (downloaded GGUF)
 
   postgres:
     image: postgres
@@ -580,23 +589,48 @@ services:
     image: qdrant/qdrant
 
   piston:
-    # self-hosted Piston stack
+    # self-hosted Piston stack (ghcr.io/engineerd/piston:latest)
 
-  vllm-general:
-    # local general model (quantized, ~3-4GB VRAM)
+  llama-coder:
+    # llama.cpp / llama-cpp-python OpenAI-compatible server
+    image: ghcr.io/ggml-org/llama.cpp:server
+    command: >
+      -m /models/qwen-coder/qwen2.5-coder-3b-instruct-q4_k_m.gguf
+      --host 0.0.0.0 --port 8000
+      --n-gpu-layers 99            # offload to the 6 GB GPU
+      --ctx-size 8192
+    volumes:
+      - ./models:/models:ro        # mount the local GGUF weights
+    ports:
+      - "8002:8000"
+    networks:
+      - sovereign-ai
+    profiles:
+      - gpu
 
-  vllm-coder:
-    # local coding model (quantized, ~3GB VRAM)
-
-  vllm-vision:
-    # local VLM where hardware permits
+  # Optional additional GGUF endpoints (loaded sequentially on the 6 GB GPU,
+  # not all at once). Obtain these weights before Demos 1/3/4:
+  # llama-general:  small Qwen2.5-Instruct GGUF  -> general LLM endpoint
+  # llama-vision:   Qwen2.5-VL-3B-Instruct GGUF  -> VLM endpoint (Demo 3)
+  # (Each is a separate llama.cpp server container mounting ./models and
+  #  pointing -m at its GGUF, exposed on its own port.)
 
   network-monitor:
     # NEW: lightweight service tracking outbound connections
     # Intercepts at Docker network level
 ```
 
-**Hardware note:** RTX 4050 (6 GB) can run one model at a time. Use sequential loading. All models quantized (AWQ/GGUF).
+**Model artifacts actually present vs. still required:**
+
+| Model role | Status | File |
+|---|---|---|
+| Coding LLM | **Present** | `models/qwen-coder/qwen2.5-coder-3b-instruct-q4_k_m.gguf` (Q4_K_M, 2.1 GB) |
+| General LLM | To obtain | small Qwen2.5-Instruct GGUF (or reuse coder for light QA) |
+| Vision (VLM) | To obtain | Qwen2.5-VL-3B-Instruct GGUF |
+| Embeddings | To obtain | BGE/E5 GGUF or sentence-transformers local model |
+| Reranker | To obtain | BGE reranker GGUF or local reranker |
+
+**Hardware note:** RTX 4050 (6 GB) can run **one** GGUF at a time (a 3B Q4_K_M ≈ 2.1 GB fits with KV cache headroom). Use the model registry + router to load the needed GGUF per task (sequential loading). All models are **GGUF** (no AWQ).
 
 ---
 
@@ -645,8 +679,9 @@ Instead:
 - [ ] FastAPI API + streaming execution events
 - [ ] LangGraph agent state and workflow
 - [ ] Model Registry + Model Router
-- [ ] Local general LLM
-- [ ] Qwen2.5-Coder-3B-Instruct
+- [ ] **llama.cpp serving layer (GGUF, OpenAI-compatible)**
+- [ ] Local general LLM (small Qwen instruct GGUF)
+- [ ] **Qwen2.5-Coder-3B-Instruct Q4_K_M GGUF (downloaded, Demo 2/6)**
 - [ ] Local VLM
 - [ ] Local embeddings
 - [ ] BM25 sparse retrieval
@@ -672,7 +707,7 @@ Instead:
 
 # 21. One-Sentence Architecture
 
-> Lovable provides the local enterprise workbench UI; FastAPI exposes the application API; LangGraph orchestrates controlled agent workflows; a model router selects local open-weight LLM/VLM endpoints served by vLLM; hybrid RAG combines dense embeddings and BM25 with RRF and reranking over Qdrant; correspondence RAG handles email and letters; Piston/Docker executes generated code safely; python-docx/openpyxl/python-pptx produce real deliverables; PostgreSQL stores metadata/audit records; local storage holds confidential files and artifacts; a real-time network monitor makes sovereignty visible; Docker Compose packages the stack; and network isolation proves the sovereign runtime boundary.
+> Lovable provides the local enterprise workbench UI; FastAPI exposes the application API; LangGraph orchestrates controlled agent workflows; a model router selects local open-weight LLM/VLM endpoints **served by llama.cpp from GGUF weights** (the downloaded `Qwen2.5-Coder-3B-Instruct Q4_K_M` GGUF is the coding model); hybrid RAG combines dense embeddings and BM25 with RRF and reranking over Qdrant; correspondence RAG handles email and letters; Piston/Docker executes generated code safely; python-docx/openpyxl/python-pptx produce real deliverables; PostgreSQL stores metadata/audit records; local storage holds confidential files and artifacts; a real-time network monitor makes sovereignty visible; Docker Compose packages the stack; and network isolation proves the sovereign runtime boundary.
 
 ---
 

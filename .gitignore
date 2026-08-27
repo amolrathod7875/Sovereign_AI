@@ -1,0 +1,9 @@
+# -----------------------------
+# Models (large binaries, do not commit)
+# -----------------------------
+models/
+*.gguf
+
+# Model cache (huggingface / download cache)
+.cache/
+**/.cache/
