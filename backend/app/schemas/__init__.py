@@ -13,6 +13,8 @@ from app.schemas.api import (
     ModelInfo,
     DocumentUploadResponse,
     DocumentResponse,
+    RoutingRequest,
+    RoutingDecision,
 )
 
 __all__ = [
@@ -30,4 +32,6 @@ __all__ = [
     "ModelInfo",
     "DocumentUploadResponse",
     "DocumentResponse",
+    "RoutingRequest",
+    "RoutingDecision",
 ]

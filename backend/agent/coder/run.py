@@ -11,6 +11,7 @@ from agent.coder.config import CODER_DIR
 from agent.coder.graph import GRAPH
 from agent.coder.state import CoderState
 from agent.security.netguard import no_network
+from app.models.router import route, RoutingRequest
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,11 @@ def run_coder_task(
     workspace = workspace or str(CODER_DIR / run_id)
     initial = create_initial_state(run_id, task, workspace)
 
+    try:
+        routing = route(RoutingRequest(task=task, requires_code=True)).model_dump()
+    except Exception as e:
+        routing = {"error": str(e), "selected_model": None, "models_required": []}
+
     with no_network() as guard:
         final = GRAPH.invoke(initial)
 
@@ -67,5 +73,6 @@ def run_coder_task(
         "external_calls": final.get("external_calls", 0),
         "trace": final.get("execution_trace", []),
         "errors": final.get("errors", []),
+        "routing": routing,
         "final_result": fr,
     }

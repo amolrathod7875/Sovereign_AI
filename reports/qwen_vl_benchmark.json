@@ -1,0 +1,20 @@
+{
+  "configuration": "CPU-only llama.cpp build (llama_supports_gpu_offload=False), n_gpu_layers=0",
+  "model": "Qwen2.5-VL-3B-Instruct (Q4_K_M)",
+  "gpu_available": false,
+  "gpu_offload_supported": false,
+  "model_load_time_s": 2.35,
+  "gpu_vram_mb": "n/a (no CUDA backend; weights resident in system RAM)",
+  "gpu_utilization": "n/a",
+  "images": {
+    "158.jpg": {
+      "total_ms": 7643,
+      "completion_chars": 238
+    },
+    "194.jpg": {
+      "total_ms": 9663,
+      "completion_chars": 385
+    }
+  },
+  "note": "GPU rows omitted: n_gpu_layers=99 was attempted and ALL 36 layers were assigned to device CPU (no CUDA backend in installed llama_cpp 0.3.35)."
+}

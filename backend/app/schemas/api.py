@@ -105,6 +105,52 @@ class ModelInfo(BaseModel):
     context_length: int
     status: str
     vram_gb: Optional[float] = None
+    local: bool = True
+    modalities: List[str] = ["text"]
+
+
+class RoutingRequest(BaseModel):
+    """Structured task description handed to the unified local model router.
+
+    Either ``task`` (free text) is supplied and classified, or the task
+    characteristics are provided explicitly. ``image_path`` / ``has_image`` mark a
+    multimodal input; explicit booleans override classification when known.
+    """
+
+    task: str = ""
+    task_type: Optional[str] = None
+    modality: Optional[str] = None          # "text" | "image" | "image+text"
+    has_image: bool = False
+    image_path: Optional[str] = None
+    requires_code: Optional[bool] = None
+    requires_vision: Optional[bool] = None
+    requires_rag: Optional[bool] = None
+    requires_tools: Optional[bool] = None
+    complexity: Optional[str] = None         # "low" | "medium" | "high"
+    asset_tag: Optional[str] = None
+    local_only: bool = True
+
+
+class RoutingDecision(BaseModel):
+    """Explainable, capability-based routing result.
+
+    ``selected_model`` is the primary model; ``models_required`` lists every local
+    model a complex task needs (e.g. vision + general for multimodal). ``external_calls``
+    is always 0 for a Sovereign-AI production routing decision.
+    """
+
+    task_type: str
+    modality: str
+    selected_model: str
+    models_required: List[str] = []
+    requires_rag: bool = False
+    requires_tools: bool = False
+    confidence: float = 0.0
+    reason: str = ""
+    capabilities: List[str] = []
+    local_only: bool = True
+    all_local: bool = True
+    external_calls: int = 0
 
 
 class DocumentUploadResponse(BaseModel):

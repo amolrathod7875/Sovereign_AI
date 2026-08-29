@@ -14,6 +14,8 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.schemas import RoutingDecision
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -38,6 +40,7 @@ class AgentRunResponse(BaseModel):
     vision_evidence: list = []
     vision_tags: list = []
     external_calls: int = 0
+    routing: Optional[RoutingDecision] = None
 
 
 @router.post("/run", response_model=AgentRunResponse)
@@ -67,6 +70,7 @@ async def run_agent(req: AgentRunRequest):
         vision_evidence=result.get("vision_evidence", []),
         vision_tags=result.get("vision_tags", []),
         external_calls=result.get("external_calls", 0),
+        routing=result.get("routing"),
     )
 
 

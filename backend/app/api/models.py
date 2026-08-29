@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 
-from app.schemas import ModelInfo
+from app.schemas import ModelInfo, RoutingRequest, RoutingDecision
+from app.models.router import route, NoLocalModelAvailable
 
 router = APIRouter()
 
@@ -44,12 +45,18 @@ async def get_model(model_id: str) -> ModelInfo:
     )
 
 
-@router.post("/route")
-async def route_model(task_type: str, has_image: bool = False) -> dict:
-    from app.models.router import route_task
+@router.post("/route", response_model=RoutingDecision)
+async def route_model(req: RoutingRequest) -> RoutingDecision:
+    """Capability-based, sovereignty-enforced model routing.
 
-    model_id = route_task(task_type, has_image)
-    return {"model_id": model_id, "task_type": task_type, "has_image": has_image}
+    Accepts a free-text task (classified) or explicit task characteristics and
+    returns the explainable ``RoutingDecision`` listing every local model the task
+    requires. Never routes to a non-local endpoint.
+    """
+    try:
+        return route(req)
+    except NoLocalModelAvailable as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @router.post("/load/{model_id}")

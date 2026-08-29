@@ -7,6 +7,7 @@ from agent.state import create_initial_state
 from agent.graph import GRAPH
 from agent.security.netguard import no_network
 from agent.config import OUTPUT_DIR
+from app.models.router import route, RoutingRequest
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,18 @@ def run_agent_task(task: str, asset_tag: str = "R-1001", run_id: str = None,
         initial["image_path"] = image_path
     if analysis_type:
         initial["analysis_type"] = analysis_type
+
+    # Capability-based routing (explainability + sovereignty metadata). This does
+    # NOT change the agent's behaviour: the LangGraph still drives the workflow and
+    # the vision tool is still called directly; we only record which local model(s)
+    # the router would assign to this task.
+    try:
+        routing = route(RoutingRequest(
+            task=task, image_path=image_path, has_image=bool(image_path),
+        )).model_dump()
+    except Exception as e:  # routing must never break the agent
+        logger.warning("model routing failed: %s", e)
+        routing = {"error": str(e), "selected_model": None, "models_required": []}
 
     with no_network() as guard:
         final = GRAPH.invoke(initial)
@@ -64,6 +77,7 @@ def run_agent_task(task: str, asset_tag: str = "R-1001", run_id: str = None,
         "trace": final.get("trace", []),
         "errors": final.get("errors", []),
         "verification": final.get("verification", {}),
+        "routing": routing,
         "output_dir": str(OUTPUT_DIR),
     }
 
