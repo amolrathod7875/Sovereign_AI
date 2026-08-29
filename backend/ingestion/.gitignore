@@ -1,0 +1,41 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+*.pyc
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+.venv
+
+# Testing and runtime
+.pytest_cache/
+*.log
+
+# Local IDE files
+.vscode/
+.idea/
+
+# Application Data Directories
+data/incoming/*
+!data/incoming/.gitkeep
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/failed/*
+!data/failed/.gitkeep
+data/manifest.jsonl
+
+# Datasets
+datasets/*
+!datasets/README.md
+PID_Dataset/
+
+# Temporary upload/test directories
+test_dup/
+tmp/
+temp/

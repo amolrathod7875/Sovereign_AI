@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign AI Workbench - MRPL</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>SOVEREIGN AI WORKBENCH</h1>
+            <h2>MRPL Knowledge System</h2>
+            <div class="status-badge">
+                <span class="indicator local"></span>
+                <span>PROCESSING MODE: LOCAL / AIR-GAPPED</span>
+            </div>
+            <div class="status-badge">
+                <span class="indicator disabled"></span>
+                <span>EXTERNAL NETWORK: DISABLED</span>
+            </div>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="upload-tab">Upload Data</button>
+            <button class="tab-btn" data-tab="sources-tab">Data Sources</button>
+        </nav>
+
+        <main>
+            <!-- UPLOAD TAB -->
+            <div id="upload-tab" class="tab-content active">
+
+                <div class="dropzone" id="dropzone">
+                    <div class="dropzone-content">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <p class="main-text">Drop files or an entire folder</p>
+                        
+                        <div class="button-group">
+                            <button type="button" class="btn secondary" id="btn-select-files">Select Files</button>
+                            <button type="button" class="btn secondary" id="btn-select-folder">Select Folder</button>
+                        </div>
+
+                        <p class="sub-text">Single file &bull; Multiple files &bull; Full folder</p>
+                        
+                        <input type="file" id="file-input" multiple style="display: none;">
+                        <input type="file" id="folder-input" webkitdirectory directory multiple style="display: none;">
+                    </div>
+                </div>
+
+                <div class="supported-formats" id="supported-formats">
+                    <p>Supported: <span id="formats-list">Loading...</span></p>
+                </div>
+
+                <div class="selection-area" id="selection-area" style="display: none;">
+                    <h3>Selected:</h3>
+                    <ul id="selected-files-list"></ul>
+                    <button type="button" class="btn primary full-width" id="btn-start-ingestion">Start Ingestion</button>
+                </div>
+
+                <div class="loading-area" id="loading-area" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Processing data locally...</p>
+                </div>
+
+                <div class="results-area" id="results-area" style="display: none;">
+                    <h3>INGESTION COMPLETE</h3>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-row">
+                            <span class="stat-label">Project ID</span>
+                            <span class="stat-value" id="res-project-id"></span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Files discovered</span>
+                            <span class="stat-value" id="res-discovered"></span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">&check; Processed</span>
+                            <span class="stat-value" id="res-processed"></span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">&#8635; Duplicates</span>
+                            <span class="stat-value" id="res-duplicates"></span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">&#10007; Failed</span>
+                            <span class="stat-value error" id="res-failed"></span>
+                        </div>
+                    </div>
+
+                    <div class="checks">
+                        <div class="check-item"><span class="check-icon">&check;</span> Originals preserved</div>
+                        <div class="check-item"><span class="check-icon">&check;</span> Validation</div>
+                        <div class="check-item"><span class="check-icon">&check;</span> SHA-256</div>
+                        <div class="check-item"><span class="check-icon">&check;</span> Local processing</div>
+                    </div>
+                    
+                    <div id="detailed-results" class="detailed-results">
+                        <!-- Detailed file results populated by JS -->
+                    </div>
+                    
+                    <button type="button" class="btn secondary full-width mt-1" id="btn-reset">Upload More Data</button>
+                </div>
+            </div>
+
+            <!-- SOURCES TAB -->
+            <div id="sources-tab" class="tab-content">
+                <div class="add-source-card">
+                    <h3>Connect Local Folder</h3>
+                    <div class="input-group">
+                        <label for="new-source-name">Source Name</label>
+                        <input type="text" id="new-source-name" placeholder="e.g. MRPL Maintenance Repository" />
+                    </div>
+                    <div class="input-group">
+                        <label for="new-source-path">Local Path</label>
+                        <input type="text" id="new-source-path" placeholder="e.g. D:\MRPL_Data\Maintenance" />
+                    </div>
+                    <button type="button" class="btn primary" id="btn-add-source">Connect Folder</button>
+                </div>
+
+                <div class="sources-list" id="sources-list">
+                    <!-- Populated via JS -->
+                </div>
+
+                <div class="enterprise-connectors">
+                    <h3>Enterprise Connectors</h3>
+                    <span class="badge warning">Coming Soon / Simulated</span>
+                    <ul class="connector-list">
+                        <li>SAP PM/MM</li>
+                        <li>SharePoint</li>
+                        <li>OneDrive</li>
+                        <li>Google Drive</li>
+                        <li>Azure Blob</li>
+                        <li>AWS S3</li>
+                    </ul>
+                </div>
+                
+                <!-- Overlay for sync loading/results -->
+                <div class="sync-overlay" id="sync-overlay" style="display: none;">
+                    <div class="sync-modal">
+                        <div id="sync-loading" style="display: none;">
+                            <div class="spinner"></div>
+                            <p>Scanning and ingesting...</p>
+                        </div>
+                        <div id="sync-results" style="display: none;">
+                            <h3>Scan Complete</h3>
+                            <div class="stats-grid">
+                                <div class="stat-row">
+                                    <span class="stat-label">NEW</span>
+                                    <span class="stat-value" id="sync-new">0</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">MODIFIED</span>
+                                    <span class="stat-value" id="sync-modified">0</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">UNCHANGED</span>
+                                    <span class="stat-value" id="sync-unchanged">0</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">DELETED</span>
+                                    <span class="stat-value" id="sync-deleted">0</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">FAILED</span>
+                                    <span class="stat-value error" id="sync-failed">0</span>
+                                </div>
+                            </div>
+                            <button class="btn primary full-width mt-1" id="btn-close-sync">Close</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
