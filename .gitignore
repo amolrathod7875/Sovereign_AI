@@ -2,6 +2,8 @@
 # Models (large binaries, do not commit)
 # -----------------------------
 models/
+PID_Dataset/
+data/
 *.gguf
 
 # Model cache (huggingface / download cache)

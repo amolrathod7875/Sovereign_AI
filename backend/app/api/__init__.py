@@ -1,25 +1,4 @@
-from .api import (
-    chat,
-    documents,
-    rag,
-    models,
-    sandbox,
-    executions,
-    network,
-    system,
-)
-from .schemas import api, agent, documents as doc_schemas
+"""FastAPI routers for the Sovereign AI backend (app.api package)."""
+from . import agent
 
-__all__ = [
-    "chat",
-    "documents",
-    "rag",
-    "models",
-    "sandbox",
-    "executions",
-    "network",
-    "system",
-    "api",
-    "agent",
-    "doc_schemas",
-]
+__all__ = ["agent"]

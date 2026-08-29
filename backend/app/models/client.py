@@ -20,6 +20,7 @@ class ModelClient:
         messages: list,
         temperature: float = 0.7,
         max_tokens: int = 2048,
+        timeout: float = 120.0,
         **kwargs,
     ) -> str:
         try:
@@ -32,6 +33,7 @@ class ModelClient:
                     "max_tokens": max_tokens,
                     **kwargs,
                 },
+                timeout=timeout,
             )
             response.raise_for_status()
             result = response.json()

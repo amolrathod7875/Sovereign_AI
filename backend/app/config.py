@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     VLLM_CODER_URL: str = "http://vllm-coder:8000/v1"
     VLLM_VISION_URL: str = "http://vllm-vision:8000/v1"
 
+    # Local OpenAI-compatible Qwen Coder server (scripts/serve_model.py --port 8002).
+    # Used by the local coding agent so it never leaves the machine.
+    CODER_ENDPOINT: str = "http://localhost:8002/v1"
+
     EMBEDDING_MODEL: str = "/models/embedding"
     RERANKER_MODEL: str = "/models/reranker"
 
