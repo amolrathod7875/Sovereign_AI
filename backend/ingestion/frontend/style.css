@@ -449,6 +449,12 @@ input[type="text"]:focus {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 1rem;
+}
+
+.source-info {
+    flex: 1;
+    min-width: 0;
 }
 
 .source-info h4 {
@@ -461,6 +467,7 @@ input[type="text"]:focus {
     font-family: monospace;
     font-size: 0.9rem;
     margin: 0 0 1rem 0;
+    word-break: break-all;
 }
 
 .source-meta {
@@ -468,11 +475,14 @@ input[type="text"]:focus {
     color: var(--text-muted);
     display: flex;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .source-actions {
     display: flex;
     gap: 0.5rem;
+    flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 /* ENTERPRISE CONNECTORS */

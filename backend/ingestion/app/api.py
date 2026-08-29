@@ -60,7 +60,15 @@ async def ingest_project(
         if not relative_path:
             relative_path = upload_file.filename
             
+        # Security: Path traversal protection
+        if ".." in relative_path or relative_path.startswith("/") or relative_path.startswith("\\") or "\0" in relative_path:
+            raise HTTPException(status_code=400, detail="Invalid path in upload")
+            
         file_dest = staging_dir / relative_path
+        
+        # Ensure resolved path is still inside staging_dir
+        if not str(file_dest.resolve()).startswith(str(staging_dir.resolve())):
+            raise HTTPException(status_code=400, detail="Path traversal detected")
         
         # Ensure parent directories exist
         file_dest.parent.mkdir(parents=True, exist_ok=True)
@@ -68,8 +76,11 @@ async def ingest_project(
         with open(file_dest, "wb") as buffer:
             shutil.copyfileobj(upload_file.file, buffer)
 
-    # Invoke the existing ingestion pipeline
-    stats = process_project(staging_dir)
+    try:
+        # Invoke the existing ingestion pipeline
+        stats = process_project(staging_dir)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="An internal error occurred during processing.")
 
     import hashlib
     project_hash = hashlib.sha256(str(staging_dir.absolute()).encode()).hexdigest()

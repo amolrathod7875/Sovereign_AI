@@ -16,6 +16,7 @@ class Metadata(BaseModel):
     classification: Optional[str] = None
     author: Optional[str] = None
     created_date: Optional[str] = None
+    modified_date: Optional[str] = None
 
 class ContentElement(BaseModel):
     type: str  # "heading", "paragraph", "table", "record"
@@ -34,8 +35,10 @@ class DocumentContent(BaseModel):
 class IngestionInfo(BaseModel):
     parser: str
     pipeline_version: str = "0.1.0"
+    schema_version: str = "1.0.0"
     processed_at: str
     status: str
+    extraction_status: str = "UNKNOWN"
 
 class Document(BaseModel):
     document_id: str

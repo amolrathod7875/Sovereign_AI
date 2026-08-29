@@ -1,98 +1,79 @@
-# Sovereign AI Workbench - MRPL
+# Sovereign AI Workbench - Ingestion Subsystem
 
-## Phase 1.5 - Local Upload Frontend
+**Phase 1 + 1.5: Local Ingestion & Frontend**
 
-This project includes a local, air-gapped web interface to easily upload documents (files or whole folders) into the Sovereign AI ingestion core.
+This subsystem prepares validated, normalized local enterprise data for future RAG processing. It does not implement RAG, embeddings, vector search, LLMs, or agents.
 
-### Architecture Overview
+## 1. What Phase 1 + 1.5 Does
+This subsystem provides a standalone, air-gapped pipeline for discovering, hashing, deduplicating, parsing, and normalizing local enterprise documents into a structured JSON format. It includes a frontend for uploading files and folders and maintaining a local sync state.
 
-The system is separated into a thin frontend API layer and a heavy backend ingestion core. This separation allows future developers to replace or improve the frontend UI completely without changing how data is parsed, hashed, normalized, and validated.
+## 2. Architecture
+The ingestion pipeline is:
+`DATA SOURCE → DISCOVERY → VALIDATION → SHA-256 → DEDUPLICATION / CHANGE DETECTION → PARSER ROUTING → EXTRACTION → NORMALIZATION → METADATA / PROVENANCE → PYDANTIC VALIDATION → LOCAL STORAGE → AUDIT MANIFEST`
 
-```text
-Frontend (Vanilla HTML/JS)
-   │
-   │ POST /api/ingest
-   ▼
-FastAPI API (app.api.upload)
-   │
-   ▼
-app.ingestion.process_project()
-   │
-   ├── parsers.py
-   ├── models.py
-   ├── hashing
-   └── storage
-   │
-   ▼
-data/
-```
+## 3. Supported Input Types
+- `.pdf`
+- `.docx`, `.pptx`, `.xlsx`, `.csv`
+- `.txt`, `.json`
+- `.png`, `.jpg`, `.jpeg`, `.tiff`
 
-### Running the Application
+## 4. Folder Upload Behaviour
+Folders uploaded via the frontend or CLI retain their hierarchical structure. The system stages the files in `data/incoming/` before passing them to the ingestion pipeline.
 
-Both the backend API and the frontend are served via a single command:
+## 5. Duplicate Behaviour
+The system computes a SHA-256 hash of every file.
+- **Exact Duplicate**: If the content hash is identical to a previously ingested file, it records a `DUPLICATE` event and skips parsing. It does not overwrite the canonical copy.
+- **Same Content, Different Name**: Treated as a `DUPLICATE`.
+- **Modified File**: If a previously synced file is modified (different hash), it is ingested as a new document, and a `MODIFIED` event is logged in the manifest linking the old and new document IDs.
 
-```bash
-uv run python -m app.main serve
-```
+## 6. Storage Structure
+- `data/incoming/`: Temporary staging for uploads and syncs.
+- `data/raw/`: Immutable copies of the original files.
+- `data/processed/`: Normalized JSON documents adhering to Pydantic schemas.
+- `data/failed/`: Corrupted or unparseable files, along with an `error.json` detailing the failure.
+- `data/sync_state/`: Local folder synchronization states.
+- `data/manifest.jsonl`: Audit history of all events (`INGESTED`, `DUPLICATE`, `FAILED`, `MODIFIED`, `DELETED`).
 
-*By default, the server runs on `http://127.0.0.1:8000`.*
-You can then open your browser and navigate to `http://localhost:8000`.
+## 7. Parser Status
+- **Apache Tika**: NOT IMPLEMENTED (Simulated)
+- **Docling**: NOT IMPLEMENTED (Simulated via PyPDF)
+- **Unstructured**: NOT IMPLEMENTED (Simulated)
+- **OCR (Tesseract)**: NOT IMPLEMENTED (Simulated)
+- **Pandas/Native JSON**: IMPLEMENTED for `.csv` and `.json`
 
-*Note: The original CLI commands (`ingest` and `inspect`) are fully preserved and still functional.*
+## 8. Local Sync Behaviour
+You can connect a local folder via the frontend or API. Clicking "Scan Now" compares the folder state against the last known state using SHA-256 hashes. It identifies `NEW`, `MODIFIED`, `UNCHANGED`, and `DELETED` files. Deleted files result in a tombstone `DELETED` event in the manifest, but their canonical historical data remains intact.
 
-### API Endpoints
+## 9. API Endpoints
+- `GET /api/health`: Health check, returns `LOCAL_ONLY` mode.
+- `GET /api/formats`: Returns supported formats.
+- `POST /api/ingest`: Multipart upload of files and paths.
+- `GET /api/sources`: List configured sync sources.
+- `POST /api/sources`: Add a new sync source.
+- `DELETE /api/sources/{id}`: Remove a sync source.
+- `POST /api/sources/{id}/scan`: Trigger a local folder sync.
 
-- **`GET /api/health`**
-  Returns `{ "status": "ok", "mode": "LOCAL_ONLY" }`.
-- **`GET /api/formats`**
-  Returns a JSON array of supported file extensions (e.g. `[".pdf", ".docx", ...]`). The frontend fetches this dynamically.
-- **`POST /api/ingest`**
-  Accepts a `multipart/form-data` payload containing:
-  - `files`: Multiple file objects.
-  - `paths`: Parallel array of relative paths for each file (this preserves the folder hierarchy).
-  - `project_name` (optional): The name of the project.
+## 10. CLI Commands
+Served via `uv run python -m app.main`:
+- `serve`: Start the FastAPI backend and static frontend.
+- `ingest --project <path>`: Ingest a local project folder directly.
+- `inspect <doc_id>`: View the normalized JSON for a processed document.
+- `reset`: Clear local data, sync state, or audit logs for development.
 
-#### Folder Upload Behavior
+## 11. Testing
+Run the test suite using `pytest`. The tests use small local fixtures only and cover:
+- Hash collisions and deduplication.
+- Empty files and excessively large files (Validation).
+- Parser extraction validation.
+- Pydantic schema validation.
 
-When a folder is selected or dropped onto the frontend dropzone, the browser extracts the relative paths of all nested files. The frontend sends these relative paths (e.g. `Engineering/P204_PID.pdf`) to the backend via the `paths` form field. The backend stages the files into the `data/incoming/` directory, exactly recreating the original directory structure before invoking the ingestion core.
+## 12. Air-gapped Guarantee
+This subsystem makes ZERO external network calls. There are no cloud telemetry endpoints, analytics, CDN-linked assets, or external APIs required to run the pipeline or the frontend interface.
 
-### File Storage Locations
+## 13. Known Limitations
+- Advanced semantic validation is not implemented.
+- P&ID understanding and relationship extraction are deferred to Phase 2.
+- All heavy AI parsers (Docling, Unstructured, OCR) are currently simulated.
 
-- **Staging Area**: Files uploaded via the API are temporarily staged in `data/incoming/{project_name}/`.
-- **Raw Storage**: After processing starts, copies are placed in `data/raw/{document_id}/`.
-- **Processed Storage**: The normalized Pydantic JSON schemas are stored in `data/processed/{document_id}.json`.
-- **Failed Storage**: Corrupted or unparseable files are stored in `data/failed/`.
-- **Manifest**: Every processed file is logged in `data/manifest.jsonl`.
-
-### Response Schema
-
-The `/api/ingest` endpoint returns a summary of the ingestion process:
-
-```json
-{
-  "project_id": "PROJECT-XYZ123",
-  "status": "completed",
-  "discovered": 5,
-  "processed": 4,
-  "duplicates": 0,
-  "failed": 1,
-  "network_calls": 0,
-  "files": [
-    {
-      "filename": "P204_PID.pdf",
-      "relative_path": "Engineering/P204_PID.pdf",
-      "status": "processed",
-      "document_id": "DOC-ABCDEF123456",
-      "parser": "docling_simulated"
-    }
-  ]
-}
-```
-
-### Future Frontend Replacement
-
-Since the frontend is just static HTML/JS communicating with a FastAPI endpoint, a future React, Vue, or Svelte developer can simply:
-1. Ignore `app/static/`.
-2. Build their own SPA.
-3. Post `multipart/form-data` to `http://localhost:8000/api/ingest` adhering to the required payload schema.
-The backend ingestion core will remain completely untouched.
+## 14. What Phase 2 Will Consume
+Phase 2 will consume the immutable `data/processed/` JSON documents. It will assume these documents are perfectly formed, validated against the Pydantic schema, and that their provenance (source, parser, timestamps) is intact and accurate.

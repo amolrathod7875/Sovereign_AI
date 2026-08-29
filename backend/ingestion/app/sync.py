@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Dict, Any, Tuple
 
 from app.ingestion import get_sha256, process_project, append_to_manifest
+from app.config import setup_logger
+
+logger = setup_logger("sync")
 
 SYNC_STATE_DIR = Path("data/sync_state")
 
@@ -138,8 +141,10 @@ def scan_source(source_id: str) -> dict:
     for rel_path_str, data in old_state.items():
         if rel_path_str not in new_state:
             stats["deleted"] += 1
+            logger.info(f"File deleted: {rel_path_str}")
             # Record deletion tombstone in manifest
             manifest_entry = {
+                "event_type": "DELETED",
                 "status": "deleted",
                 "filename": rel_path_str,
                 "document_id": data.get("document_id"),
@@ -150,6 +155,7 @@ def scan_source(source_id: str) -> dict:
             
     # If we staged files, run ingestion
     if staged_files_count > 0:
+        logger.info(f"Processing {staged_files_count} staged files for source {source_id}")
         process_stats = process_project(staging_dir)
         
         # Map the generated document IDs back to the new state
@@ -160,6 +166,20 @@ def scan_source(source_id: str) -> dict:
             if len(parts) > 1:
                 clean_rel_path = "/".join(parts[1:])
                 if clean_rel_path in new_state:
+                    # Check if this was a modification and log the MODIFIED event
+                    if clean_rel_path in old_state and old_state[clean_rel_path]["sha256"] != new_state[clean_rel_path]["sha256"]:
+                        manifest_entry = {
+                            "event_type": "MODIFIED",
+                            "status": "modified",
+                            "filename": clean_rel_path,
+                            "new_document_id": file_res.get("document_id"),
+                            "old_document_id": old_state[clean_rel_path].get("document_id"),
+                            "source_id": source_id,
+                            "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
+                        }
+                        append_to_manifest(manifest_entry)
+                        logger.info(f"File modified: {clean_rel_path}")
+                        
                     new_state[clean_rel_path]["document_id"] = file_res.get("document_id")
 
     _save_source_state(source_id, new_state)

@@ -28,6 +28,8 @@ data/processed/*
 !data/processed/.gitkeep
 data/failed/*
 !data/failed/.gitkeep
+data/sync_state/*
+!data/sync_state/.gitkeep
 data/manifest.jsonl
 
 # Datasets
