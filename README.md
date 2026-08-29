@@ -84,23 +84,11 @@ npm run dev        # Vite dev server on http://localhost:3000
 
 ```
 Sovereign_AI/
-├── readme.md                  # Project overview
 ├── README.md                  # This file
 ├── Better_plan.md             # Full architecture specification
 ├── Better_plan.pdf            # Architecture spec (PDF)
 ├── Problem_Statemen.md        # Problem statement
-├── PID_analysis_report.md     # PID analysis results report
 ├── final_frontend_gpt.md      # Frontend design notes
-├── analyze_pid.py             # PID image analysis script
-├── fix_pid_naming.py          # PID naming utility
-├── gen_report.py              # Report generation script
-├── gen_synthetic.py           # Synthetic data generation
-├── pid_pipeline.py            # PID processing pipeline
-├── verify_pid.py              # PID verification script
-├── test_qwen_coder.py         # Qwen coder test
-├── test_qwen_cv.py            # Qwen CV test
-├── test_qwen_cv_pid.py        # Qwen CV PID test
-├── test_qwen_cv_server.py     # Qwen CV server test
 │
 ├── backend/                   # FastAPI application
 │   ├── Dockerfile
@@ -230,7 +218,17 @@ Sovereign_AI/
 │   └── .env.example
 │
 ├── scripts/
-│   └── serve_model.py          # Local model serving helper
+│   ├── serve_model.py          # Local model serving helper
+│   ├── analyze_pid.py          # PID image analysis script
+│   ├── fix_pid_naming.py       # PID naming utility
+│   ├── gen_report.py           # Report generation script
+│   ├── gen_synthetic.py        # Synthetic data generation
+│   ├── pid_pipeline.py         # PID processing pipeline
+│   ├── verify_pid.py           # PID verification script
+│   ├── test_qwen_coder.py      # Qwen coder test
+│   ├── test_qwen_cv.py         # Qwen CV test
+│   ├── test_qwen_cv_pid.py     # Qwen CV PID test
+│   └── test_qwen_cv_server.py  # Qwen CV server test
 │
 ├── models/                     # Local GGUF model weights (gitignored)
 │   ├── qwen-coder/
@@ -285,7 +283,12 @@ Sovereign_AI/
 │
 └── reports/                    # Evaluation & analysis reports
     ├── agent_evaluation.md
-    └── rag_evaluation.md
+    ├── rag_evaluation.md
+    ├── PID_analysis_report.md      # PID analysis results report
+    ├── PID_194_cuda_report.md
+    ├── PID_194_vision_report.md
+    ├── PID_Dataset.md
+    └── PID_vision_test_report.md
 ```
 
 ## Components
@@ -338,7 +341,12 @@ Setup and reference documentation for each service is in `prerequistes/`:
 cd backend
 python -m pytest rag/tests/ -v
 
+# Legacy script tests
+python scripts/test_qwen_coder.py
+python scripts/test_qwen_cv.py
+
 # Lint & type check
+cd backend
 ruff check .
 mypy app/
 ```
