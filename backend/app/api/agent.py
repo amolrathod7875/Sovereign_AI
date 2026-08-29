@@ -23,6 +23,8 @@ _RUNS: Dict[str, Any] = {}
 class AgentRunRequest(BaseModel):
     task: str
     asset_tag: str = "R-1001"
+    image_path: Optional[str] = None
+    analysis_type: str = "general"
 
 
 class AgentRunResponse(BaseModel):
@@ -33,6 +35,9 @@ class AgentRunResponse(BaseModel):
     findings: list = []
     artifacts: list = []
     evidence: list = []
+    vision_evidence: list = []
+    vision_tags: list = []
+    external_calls: int = 0
 
 
 @router.post("/run", response_model=AgentRunResponse)
@@ -44,6 +49,7 @@ async def run_agent(req: AgentRunRequest):
         result = run_agent_task(
             req.task, asset_tag=req.asset_tag, run_id=run_id,
             artifact_filename=f"R-1001_api_{run_id}.docx",
+            image_path=req.image_path, analysis_type=req.analysis_type,
         )
     except Exception as e:  # surface failures clearly
         logger.error("agent run failed: %s", e)
@@ -58,6 +64,9 @@ async def run_agent(req: AgentRunRequest):
         findings=result.get("findings", []),
         artifacts=result.get("artifacts", []),
         evidence=result.get("evidence", []),
+        vision_evidence=result.get("vision_evidence", []),
+        vision_tags=result.get("vision_tags", []),
+        external_calls=result.get("external_calls", 0),
     )
 
 

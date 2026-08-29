@@ -16,6 +16,9 @@ def _source_references(state: dict) -> List[str]:
     for c in state.get("retrieved_chunks", []):
         if c.get("source_file"):
             refs.add(f"knowledge_base: {c.get('source_file')} ({c.get('document_type')})")
+    for ve in state.get("vision_evidence", []) or []:
+        if isinstance(ve, dict) and ve.get("source_file"):
+            refs.add(f"local_vision: {ve.get('source_file')} ({ve.get('analysis_type')})")
     return sorted(refs)
 
 
@@ -127,6 +130,26 @@ def _build_content(state: dict) -> Dict[str, Any]:
         f"[{e['document_type']}] {e['claim']} (conf={e['confidence']}) \u2014 {e['source_file']}"
         for e in evidence_chain
     ] or ["No evidence retrieved."]
+
+    # Vision (multimodal) evidence is surfaced with explicit provenance and an
+    # uncertainty caveat so the reader knows it came from a local VLM witness.
+    vision_evidence = state.get("vision_evidence", []) or []
+    vision_reviewed = []
+    for ve in vision_evidence:
+        if not isinstance(ve, dict):
+            continue
+        src = ve.get("source_file", "image")
+        vision_reviewed.append(
+            f"[VISION / {ve.get('analysis_type', 'general')}] {ve.get('description', '')} "
+            f"(conf={ve.get('confidence')}) \u2014 {src}"
+        )
+        for f in ve.get("findings", []) or []:
+            vision_reviewed.append(f"    \u2022 {f}")
+        for u in ve.get("uncertain_items", []) or []:
+            vision_reviewed.append(f"    \u2022 UNCERTAIN: {u}")
+    if vision_reviewed:
+        evidence_reviewed.append("Visual (P&ID / image) analysis via local Qwen-VL:")
+        evidence_reviewed.extend(f"    {v}" for v in vision_reviewed)
 
     n_breached = len([s for s in signals.values()
                       if isinstance(s, dict) and s.get("n_breach_high")])

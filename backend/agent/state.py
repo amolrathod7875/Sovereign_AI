@@ -29,6 +29,13 @@ class AgentState(TypedDict):
     user_request: str
     asset_tag: str
 
+    # --- multimodal / vision input ---
+    image_path: Optional[str]            # approved local image/PDF for VLM analysis
+    analysis_type: str                   # general | pid | document | ocr | inspection
+    has_vision_input: bool               # set by the planner / runner
+    vision_evidence: ListAppend          # List[Dict]: structured VLM results
+    vision_tags: List[str]               # equipment tags extracted from vision for RAG
+
     # --- planning ---
     plan: ListAppend  # List[Dict]: {category, document_type, query}
 
@@ -63,6 +70,11 @@ def create_initial_state(run_id: str, user_request: str, asset_tag: str = "R-100
         run_id=run_id,
         user_request=user_request,
         asset_tag=asset_tag,
+        image_path=None,
+        analysis_type="general",
+        has_vision_input=False,
+        vision_evidence=[],
+        vision_tags=[],
         plan=[],
         retrieved_documents=[],
         retrieved_chunks=[],

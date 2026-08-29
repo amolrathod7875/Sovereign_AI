@@ -15,7 +15,7 @@ from langgraph.graph import StateGraph, START, END
 from agent.state import AgentState
 from agent.nodes import (
     plan, retrieve, analyze, needs_calculation, python_analysis,
-    synthesize, decide, generate, verify, verify_route,
+    synthesize, decide, generate, verify, verify_route, vision,
 )
 
 
@@ -23,6 +23,7 @@ def build_graph():
     g = StateGraph(AgentState)
 
     g.add_node("planner", plan)
+    g.add_node("vision_analysis", vision)
     g.add_node("retrieve_evidence", retrieve)
     g.add_node("analyze_evidence", analyze)
     g.add_node("calc_gate", needs_calculation)
@@ -33,7 +34,17 @@ def build_graph():
     g.add_node("verify_output", verify)
 
     g.add_edge(START, "planner")
-    g.add_edge("planner", "retrieve_evidence")
+
+    # Multimodal branch: if a vision input is attached, analyze it with the local
+    # VLM BEFORE retrieving knowledge, so vision-extracted equipment tags can drive
+    # a vision-grounded RAG search. Otherwise go straight to retrieval.
+    g.add_conditional_edges(
+        "planner",
+        lambda s: "vision" if s.get("image_path") else "retrieve",
+        {"vision": "vision_analysis", "retrieve": "retrieve_evidence"},
+    )
+    g.add_edge("vision_analysis", "retrieve_evidence")
+
     g.add_edge("retrieve_evidence", "analyze_evidence")
     g.add_edge("analyze_evidence", "calc_gate")
 

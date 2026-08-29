@@ -7,6 +7,7 @@ from agent.nodes.synthesize import run as synthesize
 from agent.nodes.decide import run as decide
 from agent.nodes.generate import run as generate
 from agent.nodes.verify import run as verify, route as verify_route
+from agent.nodes.vision import run as vision
 
 __all__ = [
     "plan", "retrieve", "analyze", "needs_calculation", "python_analysis",

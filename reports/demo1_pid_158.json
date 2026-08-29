@@ -1,0 +1,96 @@
+{
+  "file": "158.jpg",
+  "analysis_type": "pid",
+  "description": "uncertain",
+  "findings": [
+    "Plant/system: uncertain",
+    "Equipment: Pump",
+    "Tag: Unclear",
+    "Process stream: Stream1 (In) -> Reactor1 (Out)",
+    "Process stream: Stream2 (In) -> Vessel1 (Out)",
+    "Relationship: Pump connects to vessel and reactor"
+  ],
+  "entities": [
+    {
+      "type": "pumps",
+      "name": "Pump1"
+    },
+    {
+      "type": "pumps",
+      "name": "Pump2"
+    },
+    {
+      "type": "valves",
+      "name": "Valve1"
+    },
+    {
+      "type": "valves",
+      "name": "Valve2"
+    },
+    {
+      "type": "instruments",
+      "name": "Instrument1"
+    },
+    {
+      "type": "instruments",
+      "name": "Instrument2"
+    },
+    {
+      "type": "equipment_tag",
+      "name": "Unclear"
+    },
+    {
+      "type": "equipment",
+      "name": "Pump"
+    }
+  ],
+  "uncertain_items": [
+    "Unclear about plant system"
+  ],
+  "confidence": 0.81,
+  "model": "Qwen2.5-VL-3B-Instruct",
+  "data_origin": "local",
+  "timestamp": "2026-08-29T10:39:06.266719Z",
+  "source_file": "158.jpg",
+  "prompt": "Analyze this P&ID and identify the major process system, equipment, equipment tags, process relationships, and any uncertain elements. Do not invent unreadable information.\n\nStructured extraction requirements:\nYou are inspecting a Piping & Instrumentation Diagram (P&ID). Reply with ONE compact JSON object only (no prose, no markdown). Keep EVERY array short (at most 10 items). Only list equipment/tags you can CLEARLY read. If something is unreadable, write the string 'uncertain'. NEVER invent tag numbers, pressures, temperatures or specifications. Schema:\n{\n  \"plant_system\": \"<short phrase (verified|probable|uncertain)>\",\n  \"equipment\": [\"<name (status)>\"],\n  \"equipment_tags\": [\"<tag (status)>\"],\n  \"pumps\": [\"<tag/name (status)>\"], \"vessels\": [\"<tag/name (status)>\"],\n  \"reactors\": [\"<tag/name (status)>\"], \"valves\": [\"<tag/name (status)>\"],\n  \"instruments\": [\"<tag/name (status)>\"],\n  \"process_streams\": [\"<desc + direction (status)>\"],\n  \"relationships\": [\"<visible relationship (status)>\"],\n  \"uncertain\": [\"<unreadable/ambiguous/conflict (uncertain|not_visible|conflict)>\"]\n}\nHard limit: AT MOST 8 items TOTAL across all arrays. If the drawing is dense, list only the few clearest items. If a category is absent use []. Stop immediately after the closing brace.",
+  "structured": {
+    "plant_system": "uncertain",
+    "equipment": [
+      "Pump"
+    ],
+    "equipment_tags": [
+      "Unclear"
+    ],
+    "pumps": [
+      "Pump1",
+      "Pump2"
+    ],
+    "vessels": [],
+    "reactors": [],
+    "valves": [
+      "Valve1",
+      "Valve2"
+    ],
+    "instruments": [
+      "Instrument1",
+      "Instrument2"
+    ],
+    "process_streams": [
+      "Stream1 (In) -> Reactor1 (Out)",
+      "Stream2 (In) -> Vessel1 (Out)"
+    ],
+    "relationships": [
+      "Pump connects to vessel and reactor"
+    ],
+    "uncertain": [
+      "Unclear about plant system"
+    ]
+  },
+  "pages": [
+    {
+      "page": 1,
+      "source": "158.jpg"
+    }
+  ],
+  "execution_time_s": 13.411
+}

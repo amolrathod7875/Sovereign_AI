@@ -1,0 +1,392 @@
+{
+  "run_id": "phase5b_demo3",
+  "status": "VERIFIED",
+  "decision": "Initiate a controlled reactor shutdown and perform corrective maintenance on R-1001 (catalyst replacement, top-head gasket replacement, thermowell recalibration) per the Operating/PM SOP; stage vendor-recommended spares and obtain maintenance approval before execution.",
+  "reasoning_summary": "R-1001 process data shows confirmed threshold breaches (multiple signals). These breaches are correlated with the latest inspection findings (catalyst hotspot, thermowell drift, gasket weep). The applicable Operating/PM SOP prescribes a controlled shutdown / ESD and defines the corrective actions, and the vendor correspondence recommends matching spare parts. Therefore a controlled shutdown and corrective maintenance are required, and maintenance approval must be obtained before execution. A local Qwen-VL inspection of the attached P&ID/image identified equipment/tags ['R-1001'] and reported 0 uncertain item(s); those visual observations are treated as witness evidence, not engineering truth.",
+  "approval_required": false,
+  "required_actions": [],
+  "supporting_evidence": [
+    "sensor_dataset",
+    "pid_drawing"
+  ],
+  "artifacts": [
+    "D:\\Sovereign_AI\\data\\outputs\\R-1001_vision_rag_demo.docx"
+  ],
+  "evidence": [
+    {
+      "claim": "inspection_report",
+      "source": "inspection_report.pdf",
+      "document_type": "inspection_report",
+      "confidence": 0.7
+    },
+    {
+      "claim": "inspection_report",
+      "source": "inspection_report.pdf",
+      "document_type": "inspection_report",
+      "confidence": 0.3
+    },
+    {
+      "claim": "sensor_data",
+      "source": "sensor_dataset.csv",
+      "document_type": "sensor_dataset",
+      "confidence": 0.7
+    },
+    {
+      "claim": "sensor_data",
+      "source": "sensor_dataset.csv",
+      "document_type": "sensor_dataset",
+      "confidence": 0.3
+    },
+    {
+      "claim": "equipment_manual",
+      "source": "manual.docx",
+      "document_type": "equipment_manual",
+      "confidence": 0.7
+    },
+    {
+      "claim": "equipment_manual",
+      "source": "manual.docx",
+      "document_type": "equipment_manual",
+      "confidence": 0.3
+    },
+    {
+      "claim": "operating_sop",
+      "source": "operating_sop.docx",
+      "document_type": "operating_sop",
+      "confidence": 0.7
+    },
+    {
+      "claim": "operating_sop",
+      "source": "operating_sop.docx",
+      "document_type": "operating_sop",
+      "confidence": 0.3
+    },
+    {
+      "claim": "preventive_maintenance_sop",
+      "source": "pm_sop.docx",
+      "document_type": "preventive_maintenance_sop",
+      "confidence": 0.7
+    },
+    {
+      "claim": "preventive_maintenance_sop",
+      "source": "pm_sop.docx",
+      "document_type": "preventive_maintenance_sop",
+      "confidence": 0.3
+    },
+    {
+      "claim": "vendor_correspondence",
+      "source": "vendor_correspondence.eml",
+      "document_type": "vendor_correspondence",
+      "confidence": 0.7
+    },
+    {
+      "claim": "vendor_correspondence",
+      "source": "vendor_correspondence.eml",
+      "document_type": "vendor_correspondence",
+      "confidence": 0.3
+    },
+    {
+      "claim": "asset_profile",
+      "source": "profile.json",
+      "document_type": "canonical_profile",
+      "confidence": 0.7
+    },
+    {
+      "claim": "asset_profile",
+      "source": "profile.json",
+      "document_type": "canonical_profile",
+      "confidence": 0.691
+    },
+    {
+      "claim": "vision_rag",
+      "source": "sensor_dataset.csv",
+      "document_type": "sensor_dataset",
+      "confidence": 0.7
+    },
+    {
+      "claim": "vision_rag",
+      "source": "manual.docx",
+      "document_type": "equipment_manual",
+      "confidence": 0.633
+    }
+  ],
+  "findings": [
+    {
+      "claim": "sensor_anomaly",
+      "value": "Threshold breaches detected in R-1001 process data: Reactor temperature (TI-1001) breached HIGH at 322.4 C (first 2026-08-18T00:16:00, last 2026-08-29T07:16:00); HH breaches: 39. Reactor pressure (PI-1001) breached HIGH at 22.428 bar (first 2026-08-16T17:16:00, last 2026-08-29T07:16:00); HH breaches: 0. Reactor vibration (bearing housing) (VI-1001) breached HIGH at 5.287 mm/s (first 2026-08-14T17:16:00, last 2026-08-29T07:16:00); HH breaches: 0.",
+      "source_document_type": "sensor_dataset"
+    },
+    {
+      "claim": "vision_finding",
+      "value": "[VISION] Plant/system: uncertain",
+      "source_document_type": "pid_drawing",
+      "source_file": "158.jpg"
+    },
+    {
+      "claim": "vision_finding",
+      "value": "[VISION] Equipment: R-1001 (operational)",
+      "source_document_type": "pid_drawing",
+      "source_file": "158.jpg"
+    },
+    {
+      "claim": "vision_finding",
+      "value": "[VISION] Tag: R-1001 (operational)",
+      "source_document_type": "pid_drawing",
+      "source_file": "158.jpg"
+    },
+    {
+      "claim": "vision_entity",
+      "value": "[VISION] Identified R-1001 (operational)",
+      "source_document_type": "pid_drawing",
+      "source_file": "158.jpg"
+    },
+    {
+      "claim": "vision_entity",
+      "value": "[VISION] Identified R-1001 (operational)",
+      "source_document_type": "pid_drawing",
+      "source_file": "158.jpg"
+    }
+  ],
+  "calculations_summary": {
+    "any_threshold_breach": true,
+    "breached_signals": [
+      "TI-1001_reactor_temp_C",
+      "PI-1001_reactor_pressure_bar",
+      "VI-1001_reactor_vibration_mm_s"
+    ],
+    "signals": {
+      "TI-1001_reactor_temp_C": {
+        "max": 322.4,
+        "mean": 288.146,
+        "n_breach_high": 239,
+        "first_breach_high": "2026-08-18T00:16:00",
+        "last_breach_high": "2026-08-29T07:16:00"
+      },
+      "PI-1001_reactor_pressure_bar": {
+        "max": 22.428,
+        "mean": 18.817,
+        "n_breach_high": 243,
+        "first_breach_high": "2026-08-16T17:16:00",
+        "last_breach_high": "2026-08-29T07:16:00"
+      },
+      "VI-1001_reactor_vibration_mm_s": {
+        "max": 5.287,
+        "mean": 2.668,
+        "n_breach_high": 288,
+        "first_breach_high": "2026-08-14T17:16:00",
+        "last_breach_high": "2026-08-29T07:16:00"
+      },
+      "LI-1001_reactor_level_pct": {
+        "max": 64.9,
+        "mean": 59.99,
+        "n_breach_high": 0,
+        "first_breach_high": null,
+        "last_breach_high": null
+      }
+    },
+    "inspection_findings": [],
+    "vendor_parts": [],
+    "sop_requirements": [],
+    "python_analysis": {
+      "breach_summary": {
+        "TI-1001_reactor_temp_C": {
+          "n": 39,
+          "first": "2026-08-26T23:16:00",
+          "last": "2026-08-29T07:16:00",
+          "max": 322.4
+        },
+        "PI-1001_reactor_pressure_bar": {
+          "n": 243,
+          "first": "2026-08-16T17:16:00",
+          "last": "2026-08-29T07:16:00",
+          "max": 22.428
+        },
+        "VI-1001_reactor_vibration_mm_s": {
+          "n": 288,
+          "first": "2026-08-14T17:16:00",
+          "last": "2026-08-29T07:16:00",
+          "max": 5.287
+        }
+      },
+      "temperature_trend_slope_per_reading": 0.016778,
+      "n_rows": 2160
+    }
+  },
+  "vision_evidence": [
+    {
+      "file": "158.jpg",
+      "analysis_type": "pid",
+      "description": "uncertain",
+      "findings": [
+        "Plant/system: uncertain",
+        "Equipment: R-1001 (operational)",
+        "Tag: R-1001 (operational)"
+      ],
+      "entities": [
+        {
+          "type": "equipment_tag",
+          "name": "R-1001 (operational)"
+        },
+        {
+          "type": "equipment",
+          "name": "R-1001 (operational)"
+        }
+      ],
+      "uncertain_items": [],
+      "confidence": 0.9,
+      "model": "Qwen2.5-VL-3B-Instruct",
+      "data_origin": "local",
+      "timestamp": "2026-08-29T10:39:27.690099Z",
+      "source_file": "158.jpg",
+      "prompt": "Inspect P&ID 158.jpg and connect any identified R-1001 information to the local knowledge base. Explain the relevant R-1001 context using only retrieved local evidence.\n\nStructured extraction requirements:\nYou are inspecting a Piping & Instrumentation Diagram (P&ID). Reply with ONE compact JSON object only (no prose, no markdown). Keep EVERY array short (at most 10 items). Only list equipment/tags you can CLEARLY read. If something is unreadable, write the string 'uncertain'. NEVER invent tag numbers, pressures, temperatures or specifications. Schema:\n{\n  \"plant_system\": \"<short phrase (verified|probable|uncertain)>\",\n  \"equipment\": [\"<name (status)>\"],\n  \"equipment_tags\": [\"<tag (status)>\"],\n  \"pumps\": [\"<tag/name (status)>\"], \"vessels\": [\"<tag/name (status)>\"],\n  \"reactors\": [\"<tag/name (status)>\"], \"valves\": [\"<tag/name (status)>\"],\n  \"instruments\": [\"<tag/name (status)>\"],\n  \"process_streams\": [\"<desc + direction (status)>\"],\n  \"relationships\": [\"<visible relationship (status)>\"],\n  \"uncertain\": [\"<unreadable/ambiguous/conflict (uncertain|not_visible|conflict)>\"]\n}\nHard limit: AT MOST 8 items TOTAL across all arrays. If the drawing is dense, list only the few clearest items. If a category is absent use []. Stop immediately after the closing brace.",
+      "structured": {
+        "plant_system": "uncertain",
+        "equipment": [
+          "R-1001 (operational)"
+        ],
+        "equipment_tags": [
+          "R-1001 (operational)"
+        ],
+        "pumps": [],
+        "vessels": [],
+        "reactors": [],
+        "valves": [],
+        "instruments": [],
+        "process_streams": [],
+        "relationships": [],
+        "uncertain": []
+      },
+      "pages": [
+        {
+          "page": 1,
+          "source": "158.jpg"
+        }
+      ],
+      "execution_time_s": 10.32
+    }
+  ],
+  "vision_tags": [
+    "R-1001"
+  ],
+  "image_path": "D:\\Sovereign_AI\\PID_Dataset\\0__raw_data\\sheets\\test\\158.jpg",
+  "analysis_type": "pid",
+  "external_calls": 0,
+  "trace": [
+    {
+      "timestamp": "2026-08-29T10:39:17.369789Z",
+      "node": "plan",
+      "action": "create_plan",
+      "tool": "planner",
+      "duration_ms": 0,
+      "status": "SUCCESS",
+      "plan_length": 8
+    },
+    {
+      "timestamp": "2026-08-29T10:39:27.690099Z",
+      "node": "vision_analysis",
+      "action": "analyze_image",
+      "tool": "agent.tools.vision",
+      "duration_ms": 10320,
+      "status": "SUCCESS",
+      "analysis_type": "pid",
+      "findings": 3,
+      "uncertain": 0,
+      "tags": [
+        "R-1001"
+      ]
+    },
+    {
+      "timestamp": "2026-08-29T10:39:34.220394Z",
+      "node": "retrieve_evidence",
+      "action": "hybrid_retrieve+read",
+      "tool": "search_knowledge_base,read_document",
+      "duration_ms": 6528,
+      "status": "SUCCESS",
+      "chunks": 36,
+      "docs": 1,
+      "evidence": 16,
+      "vision_tags": 1
+    },
+    {
+      "timestamp": "2026-08-29T10:39:34.232093Z",
+      "node": "analyze_evidence",
+      "action": "sensor_analysis+extract",
+      "tool": "analyze_csv,regex",
+      "duration_ms": 11,
+      "status": "SUCCESS",
+      "breached": true,
+      "needs_calc": true,
+      "inspection_findings": 0,
+      "vendor_parts": 0
+    },
+    {
+      "timestamp": "2026-08-29T10:39:34.232093Z",
+      "node": "needs_calculation",
+      "action": "route_decision",
+      "tool": null,
+      "duration_ms": 0,
+      "status": "SUCCESS",
+      "needs_calculation": true
+    },
+    {
+      "timestamp": "2026-08-29T10:39:34.311476Z",
+      "node": "python_analysis",
+      "action": "sandboxed_analysis",
+      "tool": "python_execute",
+      "duration_ms": 79,
+      "status": "SUCCESS",
+      "exit_code": 0
+    },
+    {
+      "timestamp": "2026-08-29T10:39:34.312648Z",
+      "node": "synthesize_findings",
+      "action": "reason_chain",
+      "tool": "internal",
+      "duration_ms": 0,
+      "status": "SUCCESS",
+      "findings": 6,
+      "actions": 0,
+      "approval_required": false
+    },
+    {
+      "timestamp": "2026-08-29T10:39:34.312648Z",
+      "node": "make_decision",
+      "action": "form_decision",
+      "tool": "internal",
+      "duration_ms": 0,
+      "status": "SUCCESS",
+      "approval_required": false,
+      "supporting": 2
+    },
+    {
+      "timestamp": "2026-08-29T10:39:34.425366Z",
+      "node": "generate_approval_note",
+      "action": "create_docx",
+      "tool": "create_approval_note",
+      "duration_ms": 111,
+      "status": "SUCCESS",
+      "path": "D:\\Sovereign_AI\\data\\outputs\\R-1001_vision_rag_demo.docx"
+    },
+    {
+      "timestamp": "2026-08-29T10:39:34.439315Z",
+      "node": "verify_output",
+      "action": "validate_docx",
+      "tool": "verify_docx",
+      "duration_ms": 13,
+      "status": "SUCCESS",
+      "ok": true,
+      "iterations": 0
+    }
+  ],
+  "errors": [],
+  "verification": {
+    "ok": true,
+    "missing_sections": [],
+    "asset_present": true,
+    "disclaimer_present": true,
+    "sources_present": true,
+    "paragraphs": 62
+  },
+  "output_dir": "D:\\Sovereign_AI\\data\\outputs",
+  "demo_execution_time_s": 17.079
+}

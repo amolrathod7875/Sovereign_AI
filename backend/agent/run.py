@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 def run_agent_task(task: str, asset_tag: str = "R-1001", run_id: str = None,
-                   artifact_filename: str = None) -> Dict[str, Any]:
+                   artifact_filename: str = None, image_path: str = None,
+                   analysis_type: str = "general") -> Dict[str, Any]:
     """Run the full maintenance-agent workflow.
 
     Returns a serialisable result dict including the final state, decision,
@@ -20,11 +21,17 @@ def run_agent_task(task: str, asset_tag: str = "R-1001", run_id: str = None,
 
     ``artifact_filename`` optionally overrides the generated DOCX filename so a
     new version can be produced without overwriting an existing artifact.
+    ``image_path`` attaches a local image/PDF for the vision tool (multimodal).
+    ``analysis_type`` hints the vision tool (general|pid|document|ocr|inspection).
     """
     run_id = run_id or f"run_{uuid.uuid4().hex[:12]}"
     initial = create_initial_state(run_id, task, asset_tag)
     if artifact_filename:
         initial["artifact_filename"] = artifact_filename
+    if image_path:
+        initial["image_path"] = image_path
+    if analysis_type:
+        initial["analysis_type"] = analysis_type
 
     with no_network() as guard:
         final = GRAPH.invoke(initial)
@@ -49,6 +56,10 @@ def run_agent_task(task: str, asset_tag: str = "R-1001", run_id: str = None,
         "evidence": evidence,
         "findings": final.get("findings", []),
         "calculations_summary": _calc_summary(final.get("calculations", {})),
+        "vision_evidence": final.get("vision_evidence", []),
+        "vision_tags": final.get("vision_tags", []),
+        "image_path": final.get("image_path"),
+        "analysis_type": final.get("analysis_type", "general"),
         "external_calls": final.get("external_calls", 0),
         "trace": final.get("trace", []),
         "errors": final.get("errors", []),

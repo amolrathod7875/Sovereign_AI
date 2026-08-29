@@ -1,0 +1,64 @@
+{
+  "file": "194.jpg",
+  "analysis_type": "inspection",
+  "description": "A process flow diagram (P&ID) showing various equipment and process elements.",
+  "findings": [
+    "probable"
+  ],
+  "entities": [
+    {
+      "type": "entity",
+      "name": "{'name': 'Valve', 'status': 'Visible'}"
+    },
+    {
+      "type": "entity",
+      "name": "{'name': 'Pump', 'status': 'Visible'}"
+    },
+    {
+      "type": "entity",
+      "name": "{'name': 'Heat Exchanger', 'status': 'Visible'}"
+    }
+  ],
+  "uncertain_items": [
+    "{'item': 'Not Visible', 'reason': 'The exact type of equipment or process elements cannot be confidently identified.'}"
+  ],
+  "confidence": 0.6,
+  "model": "Qwen2.5-VL-3B-Instruct",
+  "data_origin": "local",
+  "timestamp": "2026-08-29T10:39:17.362794Z",
+  "source_file": "194.jpg",
+  "prompt": "Inspect this P&ID and identify the equipment and process elements that are clearly visible. Highlight anything that cannot be confidently identified.\n\nStructured extraction requirements:\nYou are describing an image for an engineering audit. Reply with ONE compact JSON object only (no prose, no markdown). Keep arrays short (<=8 items). Do not invent information; mark the unreadable as uncertain or not_visible. Schema:\n{\n  \"description\": \"<concise description>\",\n  \"findings\": [\"<observable fact (verified|probable|uncertain)>\"],\n  \"entities\": [\"<named object/equipment/tag (status)>\"],\n  \"uncertain_items\": [\"<unclear item (uncertain|not_visible|conflict)>\"]\n}\nStop immediately after the closing brace.",
+  "structured": {
+    "description": "A process flow diagram (P&ID) showing various equipment and process elements.",
+    "findings": [
+      "probable"
+    ],
+    "entities": [
+      {
+        "name": "Valve",
+        "status": "Visible"
+      },
+      {
+        "name": "Pump",
+        "status": "Visible"
+      },
+      {
+        "name": "Heat Exchanger",
+        "status": "Visible"
+      }
+    ],
+    "uncertain_items": [
+      {
+        "item": "Not Visible",
+        "reason": "The exact type of equipment or process elements cannot be confidently identified."
+      }
+    ]
+  },
+  "pages": [
+    {
+      "page": 1,
+      "source": "194.jpg"
+    }
+  ],
+  "execution_time_s": 11.096
+}

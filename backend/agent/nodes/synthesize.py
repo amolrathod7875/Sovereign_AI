@@ -66,6 +66,30 @@ def run(state: dict) -> dict:
             "source_document_type": "vendor_correspondence",
         })
 
+    # 4b) Vision (multimodal) evidence — from the local Qwen-VL tool.
+    vision_evidence = state.get("vision_evidence", []) or []
+    vision_uncertain: List[str] = []
+    for ve in vision_evidence:
+        if not isinstance(ve, dict):
+            continue
+        src = ve.get("source_file", "image")
+        for f in ve.get("findings", []) or []:
+            findings.append({
+                "claim": "vision_finding",
+                "value": f"[VISION] {f}",
+                "source_document_type": "pid_drawing",
+                "source_file": src,
+            })
+        for e in ve.get("entities", []) or []:
+            name = e.get("name") if isinstance(e, dict) else str(e)
+            findings.append({
+                "claim": "vision_entity",
+                "value": f"[VISION] Identified {name}",
+                "source_document_type": "pid_drawing",
+                "source_file": src,
+            })
+        vision_uncertain.extend(ve.get("uncertain_items", []) or [])
+
     # 5) Corrective action
     shutdown_needed = any(k in " ".join(sop).lower() for k in ("shutdown", "esd", "trip"))
     if shutdown_needed:

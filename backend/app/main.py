@@ -15,6 +15,7 @@ from app.api import (
     system,
     agent,
     coder,
+    vision,
 )
 from app.storage.postgres import init_db
 from app.storage.qdrant import init_qdrant
@@ -58,6 +59,7 @@ app.include_router(network.router, prefix="/api/network", tags=["network"])
 app.include_router(system.router, prefix="/api/system", tags=["system"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(coder.router, prefix="/api/coder", tags=["coder"])
+app.include_router(vision.router, prefix="/api/vision", tags=["vision"])
 
 
 @app.get("/")

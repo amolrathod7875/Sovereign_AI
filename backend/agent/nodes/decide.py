@@ -25,6 +25,18 @@ def run(state: dict) -> dict:
         if dt and dt not in sources:
             sources.append(dt)
 
+    # Multimodal (vision) evidence summary, if the task used the local VLM.
+    vision_evidence = state.get("vision_evidence", []) or []
+    vision_summary = ""
+    if vision_evidence:
+        tags = state.get("vision_tags", []) or []
+        uncertain_total = sum(len(v.get("uncertain_items", []) or []) for v in vision_evidence)
+        vision_summary = (
+            f" A local Qwen-VL inspection of the attached P&ID/image identified "
+            f"equipment/tags {tags} and reported {uncertain_total} uncertain item(s); "
+            f"those visual observations are treated as witness evidence, not engineering truth."
+        )
+
     reasoning = (
         "R-1001 process data shows confirmed threshold breaches "
         f"({'multiple signals' if sensor.get('breached_signals') else 'no signal'}). "
@@ -33,7 +45,7 @@ def run(state: dict) -> dict:
         "prescribes a controlled shutdown / ESD and defines the corrective actions, and the "
         "vendor correspondence recommends matching spare parts. Therefore a controlled shutdown "
         "and corrective maintenance are required, and maintenance approval must be obtained before execution."
-    )
+    ) + vision_summary
 
     decision = {
         "decision": (

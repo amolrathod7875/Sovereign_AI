@@ -35,6 +35,10 @@ EVIDENCE_CATALOGUE = {
         "canonical_profile",
         "R-1001 alarm thresholds design operating parameters sensor definitions",
     ),
+    "vision": (
+        "pid_drawing",
+        "P&ID equipment tags process streams relationships reactor vessel pump valve instrument",
+    ),
 }
 
 # Keywords that signal a category is needed for a given request.
@@ -46,6 +50,8 @@ _CATEGORY_KEYWORDS = {
     "inspection_report": ["inspection", "finding", "inspect"],
     "vendor_correspondence": ["vendor", "recommend", "correspondence", "spare", "part"],
     "asset_profile": ["profile", "threshold", "alarm", "parameter"],
+    "vision": ["image", "picture", "photo", "drawing", "diagram", "visual", "scan",
+                "p&id", "pid", "inspect", "pdf", "document"],
 }
 
 
