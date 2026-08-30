@@ -1,97 +1,99 @@
-import { CheckCircle, Cpu, Database, Network } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CheckCircle, Cpu, Network, Shield } from 'lucide-react'
+import { useSystemStore, summarizeModels } from '../lib/store'
+import { apiClient } from '../lib/api/client'
+import type { NetworkEvent } from '../lib/api/types'
 
 export default function Dashboard() {
+  const status = useSystemStore((s) => s.status)
+  const models = useSystemStore((s) => s.models)
+  const error = useSystemStore((s) => s.error)
+  const [events, setEvents] = useState<NetworkEvent[]>([])
+
+  useEffect(() => {
+    apiClient.getNetworkEvents(10).then(setEvents).catch(() => setEvents([]))
+  }, [])
+
+  const modelSummary = summarizeModels(models)
+  const externalCalls = status?.external_api_calls ?? 0
+  const backendUp = !error && status !== null
+
+  const services = (status?.components ?? []).map((c) => ({
+    name: c.name,
+    status: c.status === 'ONLINE' ? 'online' : c.status === 'NOT CONFIGURED' ? 'not-configured' : 'offline',
+    model: '',
+  }))
+
   return (
     <div className="space-y-6">
-      {/* Stats Grid */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-background-secondary rounded-lg border border-border p-4">
           <div className="flex items-center gap-2 text-accent-sovereign mb-2">
-            <div className="w-2 h-2 rounded-full bg-accent-sovereign animate-pulse" />
-            <span className="text-xs font-medium">SOVEREIGN</span>
+            <div className={backendUp ? 'w-2 h-2 rounded-full bg-accent-sovereign animate-pulse' : 'w-2 h-2 rounded-full bg-accent-danger'} />
+            <span className="text-xs font-medium">{backendUp ? 'SOVEREIGN' : 'BACKEND OFFLINE'}</span>
           </div>
-          <p className="text-2xl font-bold text-text-primary">ACTIVE</p>
-          <p className="text-xs text-text-secondary mt-1">External AI calls: 0</p>
+          <p className="text-2xl font-bold text-text-primary">{backendUp ? 'ACTIVE' : 'OFFLINE'}</p>
+          <p className="text-xs text-text-secondary mt-1">External AI calls: {externalCalls}</p>
         </div>
 
         <div className="bg-background-secondary rounded-lg border border-border p-4">
           <div className="flex items-center gap-2 text-accent-primary mb-2">
             <Cpu className="w-4 h-4" />
-            <span className="text-xs font-medium">GPU</span>
+            <span className="text-xs font-medium">MODELS</span>
           </div>
-          <p className="text-2xl font-bold text-text-primary">--</p>
-          <p className="text-xs text-text-secondary mt-1">Memory: --</p>
+          <p className="text-2xl font-bold text-text-primary">
+            {modelSummary.available}/{modelSummary.total}
+          </p>
+          <p className="text-xs text-text-secondary mt-1">Local models available</p>
         </div>
 
         <div className="bg-background-secondary rounded-lg border border-border p-4">
           <div className="flex items-center gap-2 text-accent-success mb-2">
             <CheckCircle className="w-4 h-4" />
-            <span className="text-xs font-medium">SERVICES</span>
+            <span className="text-xs font-medium">EXTERNAL</span>
           </div>
-          <p className="text-2xl font-bold text-text-primary">6/6</p>
-          <p className="text-xs text-text-secondary mt-1">All systems operational</p>
+          <p className="text-2xl font-bold text-text-primary">{externalCalls}</p>
+          <p className="text-xs text-text-secondary mt-1">Calls to non-local hosts</p>
         </div>
       </div>
 
-      {/* Services Grid */}
       <div className="bg-background-secondary rounded-lg border border-border p-4">
-        <h3 className="text-sm font-semibold text-text-primary mb-4">Services</h3>
+        <h3 className="text-sm font-semibold text-text-primary mb-4">Components</h3>
         <div className="grid grid-cols-3 gap-4">
-          {[
-            { name: 'vLLM General', status: 'online', model: 'Qwen2.5-3B' },
-            { name: 'vLLM Coder', status: 'online', model: 'Qwen2.5-Coder' },
-            { name: 'Qdrant', status: 'online', model: '' },
-            { name: 'PostgreSQL', status: 'online', model: '' },
-            { name: 'Piston', status: 'online', model: '' },
-            { name: 'Frontend', status: 'online', model: '' },
-          ].map(service => (
+          {services.length === 0 && <p className="text-xs text-text-secondary">No component data.</p>}
+          {services.map((service) => (
             <div key={service.name} className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${service.status === 'online' ? 'bg-accent-success' : 'bg-accent-danger'}`} />
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  service.status === 'online' ? 'bg-accent-success' : service.status === 'not-configured' ? 'bg-text-secondary' : 'bg-accent-danger'
+                }`}
+              />
               <div>
                 <p className="text-sm text-text-primary">{service.name}</p>
-                {service.model && <p className="text-xs text-text-secondary">{service.model}</p>}
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Recent Activity */}
       <div className="bg-background-secondary rounded-lg border border-border p-4">
-        <h3 className="text-sm font-semibold text-text-primary mb-4">Recent Activity</h3>
-        <div className="space-y-2">
-          {[
-            { action: 'Inspection report analyzed', time: '2 min ago', status: 'success' },
-            { action: 'approval_note.docx generated', time: '2 min ago', status: 'success' },
-            { action: 'CSV analysis verified', time: '8 min ago', status: 'success' },
-            { action: 'Engineering image analyzed', time: '21 min ago', status: 'success' },
-          ].map((item, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm">
-              {item.status === 'success' && <CheckCircle className="w-3 h-3 text-accent-success" />}
-              <span className="text-text-primary">{item.action}</span>
-              <span className="text-xs text-text-secondary">{item.time}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Network Status */}
-      <div className="bg-background-secondary rounded-lg border border-border p-4">
-        <h3 className="text-sm font-semibold text-text-primary mb-4">Network Status</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-text-secondary">External AI calls:</span>
-            <span className="text-sm font-bold text-accent-success">0</span>
+        <h3 className="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
+          <Network className="w-4 h-4" /> Network Log
+        </h3>
+        {events.length === 0 ? (
+          <div className="flex items-center gap-2 text-sm text-text-secondary">
+            <Shield className="w-4 h-4 text-accent-sovereign" />
+            No outbound connections detected since system start.
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-text-secondary">Blocked attempts:</span>
-            <span className="text-sm font-bold text-text-primary">0</span>
+        ) : (
+          <div className="space-y-1">
+            {events.map((e) => (
+              <div key={e.id} className="text-xs text-text-secondary font-mono">
+                {e.timestamp} → {e.destination_host}:{e.destination_port} [{e.action}]
+              </div>
+            ))}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-text-secondary">Local traffic:</span>
-            <span className="text-sm font-bold text-accent-success">healthy</span>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   )

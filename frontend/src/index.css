@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* NOTE: no external @import (Google Fonts) — the UI must make zero external
+ * network calls to preserve the sovereignty guarantee. System fonts are used
+ * via the Tailwind font stack (Inter -> system-ui -> sans-serif). */
 
 * {
   margin: 0;

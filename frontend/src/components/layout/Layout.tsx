@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -11,6 +12,7 @@ import {
   Shield,
 } from 'lucide-react'
 import clsx from 'clsx'
+import { useSystemStore, summarizeModels } from '../../lib/store'
 
 const navItems = [
   { path: '/workbench', label: 'AI Workbench', icon: MessageSquare },
@@ -25,6 +27,22 @@ const navItems = [
 
 export default function Layout() {
   const location = useLocation()
+  const status = useSystemStore((s) => s.status)
+  const models = useSystemStore((s) => s.models)
+  const error = useSystemStore((s) => s.error)
+  const startPolling = useSystemStore((s) => s.startPolling)
+
+  useEffect(() => {
+    const stop = startPolling(15000)
+    return stop
+  }, [startPolling])
+
+  const modelSummary = summarizeModels(models)
+  // Real external-call count from the backend probe (never asserted as 0).
+  const externalCalls = status?.external_api_calls ?? 0
+  const backendUp = !error && status !== null
+  const localLabel = backendUp ? 'LOCAL ONLY' : 'BACKEND OFFLINE'
+  const localTone = backendUp ? 'bg-accent-sovereign' : 'bg-accent-danger'
 
   return (
     <div className="flex h-screen bg-background-primary">
@@ -60,12 +78,17 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* Sovereignty Badge */}
+        {/* Sovereignty Badge — driven by real backend status */}
         <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-2 text-accent-sovereign">
-            <div className="w-2 h-2 rounded-full bg-accent-sovereign animate-pulse" />
-            <span className="text-xs font-medium">LOCAL / AIR-GAPPED</span>
+          <div className={clsx('flex items-center gap-2', backendUp ? 'text-accent-sovereign' : 'text-accent-danger')}>
+            <div className={clsx('w-2 h-2 rounded-full animate-pulse', localTone)} />
+            <span className="text-xs font-medium">{localLabel}</span>
           </div>
+          {backendUp && (
+            <p className="text-[10px] text-text-secondary mt-1">
+              External calls: <span className="font-mono text-text-primary">{externalCalls}</span>
+            </p>
+          )}
         </div>
       </aside>
 
@@ -77,10 +100,26 @@ export default function Layout() {
             {navItems.find(item => item.path === location.pathname)?.label || 'Sovereign AI'}
           </h2>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-accent-sovereign">
-              <div className="w-2 h-2 rounded-full bg-accent-sovereign animate-pulse" />
-              <span className="text-xs font-medium">LOCAL ONLY</span>
+            <div className={clsx('flex items-center gap-2', backendUp ? 'text-accent-sovereign' : 'text-accent-danger')}>
+              <div className={clsx('w-2 h-2 rounded-full animate-pulse', localTone)} />
+              <span className="text-xs font-medium">{localLabel}</span>
             </div>
+            {backendUp && (
+              <div className="flex items-center gap-3 text-xs text-text-secondary">
+                <span>
+                  Models:{' '}
+                  <span className={modelSummary.available === modelSummary.total ? 'text-accent-success' : 'text-accent-warning'}>
+                    {modelSummary.available}/{modelSummary.total}
+                  </span>
+                </span>
+                <span>
+                  Network:{' '}
+                  <span className={externalCalls === 0 ? 'text-accent-success' : 'text-accent-danger'}>
+                    {externalCalls} external
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
         </header>
 
@@ -89,26 +128,31 @@ export default function Layout() {
           <Outlet />
         </div>
 
-        {/* Status Bar */}
+        {/* Status Bar — real component states from /api/system/status */}
         <footer className="h-8 bg-background-secondary border-t border-border flex items-center px-4 text-xs text-text-secondary">
-          <div className="flex items-center gap-6">
-            <span>GPU: --</span>
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-sovereign" />
-              vLLM
+          <div className="flex items-center gap-4 overflow-x-auto">
+            <span>
+              GPU:{' '}
+              {status?.gpu?.name ?? (status ? 'none detected' : '--')}
+              {status?.gpu?.memory_used_gb != null && ` (${status.gpu.memory_used_gb}/${status.gpu.memory_total_gb} GB)`}
             </span>
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-sovereign" />
-              Qdrant
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-sovereign" />
-              PostgreSQL
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-sovereign" />
-              Piston
-            </span>
+            {(status?.components ?? []).map((c) => (
+              <span key={c.id} className="flex items-center gap-1" title={c.detail}>
+                <span
+                  className={
+                    'w-1.5 h-1.5 rounded-full ' +
+                    (c.status === 'ONLINE'
+                      ? 'bg-accent-success'
+                      : c.status === 'OFFLINE'
+                        ? 'bg-accent-warning'
+                        : c.status === 'UNAVAILABLE'
+                          ? 'bg-accent-danger'
+                          : 'bg-text-secondary')
+                  }
+                />
+                {c.name}
+              </span>
+            ))}
           </div>
         </footer>
       </main>
