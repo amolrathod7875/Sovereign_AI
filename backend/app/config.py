@@ -6,8 +6,17 @@ class Settings(BaseSettings):
     APP_ENV: str = "local"
     SOVEREIGN_MODE: bool = True
 
-    POSTGRES_URL: str = "postgresql://postgres:postgres@postgres:5432/sovereign_ai"
-    QDRANT_URL: str = "http://qdrant:6333"
+    # PostgreSQL. The docker-compose deployment uses the service name "postgres".
+    # For local/standalone runs (no docker) override with a real async Postgres URL,
+    # e.g. postgresql+asyncpg://postgres:postgres@localhost:5432/sovereign_ai.
+    # NOTE: the app uses the async SQLAlchemy engine, so the driver MUST be async
+    # (postgresql+asyncpg://). Using the sync psycopg2 driver raises at import time.
+    POSTGRES_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/sovereign_ai"
+
+    # Qdrant. The authoritative agent RAG path uses an embedded local Qdrant
+    # (see backend/rag/config.py: QDRANT_PATH), so this server is only needed by
+    # the /api/rag endpoints. When unreachable the backend degrades gracefully.
+    QDRANT_URL: str = "http://localhost:6333"
 
     VLLM_GENERAL_URL: str = "http://vllm-general:8000/v1"
     VLLM_CODER_URL: str = "http://vllm-coder:8000/v1"

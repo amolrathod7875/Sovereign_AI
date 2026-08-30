@@ -9,8 +9,16 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-engine = create_async_engine(settings.POSTGRES_URL, echo=False)
-async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+# The app is fully async, so the engine requires an async driver
+# (postgresql+asyncpg://). Creating the engine eagerly is safe, but we guard
+# against configuration problems so the rest of the backend still imports cleanly.
+try:
+    engine = create_async_engine(settings.POSTGRES_URL, echo=False)
+except Exception as e:  # pragma: no cover - defensive
+    logger.error("Failed to create Postgres engine: %s", e)
+    engine = None
+
+async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False) if engine else None
 
 Base = declarative_base()
 
@@ -87,8 +95,20 @@ class NetworkEvent(Base):
 
 
 async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Create tables if Postgres is reachable.
+
+    Degrades gracefully when no database is configured/available (e.g. local
+    standalone run): the sovereign agent and embedded RAG do not require Postgres,
+    so the backend still boots and serves the offline path.
+    """
+    if engine is None:
+        logger.warning("Postgres engine not configured - skipping DB init (offline mode).")
+        return
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        logger.error("Postgres init failed (continuing offline): %s", e)
 
 
 async def get_session() -> AsyncSession:

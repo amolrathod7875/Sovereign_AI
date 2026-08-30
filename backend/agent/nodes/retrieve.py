@@ -59,27 +59,11 @@ def run(state: dict) -> dict:
             logger.error("retrieval failed for %s: %s", dt, e)
             errors.append(f"retrieve:{dt}:{e}")
 
-    # Vision-grounded RAG: use equipment tags the VLM extracted from the drawing
-    # to pull the matching local knowledge-base documents (vision -> RAG).
-    vision_tags = state.get("vision_tags") or []
-    if vision_tags:
-        for tag in vision_tags[:5]:
-            try:
-                hits = search_knowledge_base(
-                    f"{tag} equipment specification operating parameters",
-                    asset_tag=asset_tag, top_k=4,
-                )
-                for h in hits:
-                    chunks.append(h)
-                evidence.extend(_build_evidence(
-                    {"category": "vision_rag", "document_type": h.get("document_type", "")},
-                    hits,
-                ))
-            except Exception as e:
-                logger.error("vision-grounded retrieval failed for %s: %s", tag, e)
-                errors.append(f"retrieve:vision_rag:{tag}:{e}")
-
         # Targeted full read for precise extraction (inspection / vendor / SOP / profile / sensors).
+        # This MUST run for every planned document type: the ANALYZE_EVIDENCE node
+        # extracts inspection findings / vendor parts / SOP requirements from these
+        # full documents, and everything downstream (findings, required_actions,
+        # approval_required, the approval-note artifact) is grounded in them.
         path = _DOC_PATHS.get(dt)
         if path and os.path.exists(str(path)):
             try:
@@ -94,6 +78,26 @@ def run(state: dict) -> dict:
             except Exception as e:
                 logger.error("read failed for %s: %s", path, e)
                 errors.append(f"read:{dt}:{e}")
+
+    # Vision-grounded RAG: use equipment tags the VLM extracted from the drawing
+    # to pull the matching local knowledge-base documents (vision -> RAG).
+    vision_tags = state.get("vision_tags") or []
+    if vision_tags:
+        for tag in vision_tags[:5]:
+            try:
+                hits = search_knowledge_base(
+                    f"{tag} equipment specification operating parameters",
+                    asset_tag=asset_tag, top_k=4,
+                )
+                for h in hits:
+                    chunks.append(h)
+                evidence.extend(_build_evidence(
+                    {"category": "vision_rag", "document_type": ""},
+                    hits,
+                ))
+            except Exception as e:
+                logger.error("vision-grounded retrieval failed for %s: %s", tag, e)
+                errors.append(f"retrieve:vision_rag:{tag}:{e}")
 
     return {
         "retrieved_chunks": chunks,

@@ -33,7 +33,7 @@ GEN_USER = (
     "   - Define `def analyze(csv_path: str, thresholds: dict) -> dict` where `thresholds` maps "
     "each signal name ('temperature','pressure','vibration') to a numeric threshold. "
     "A reading is a BREACH when its value is STRICTLY GREATER THAN the threshold.\n"
-    "   - Return a dict: {signal: {'breaches': int, 'first_breach_timestamp': str|None}}.\n"
+    "   - Return a dict: {{signal: {{'breaches': int, 'first_breach_timestamp': str|None}}}}.\n"
     "     'first_breach_timestamp' is the timestamp of the FIRST (chronologically earliest) row "
     "whose value exceeds the threshold, or None if there are no breaches.\n"
     "   - Also include an `if __name__ == '__main__':` block that reads 'sensor_fixture.csv', "

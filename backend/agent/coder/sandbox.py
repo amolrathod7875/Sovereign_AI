@@ -63,7 +63,7 @@ def _prelude(workspace: str) -> str:
     blocked = ", ".join(repr(m) for m in sorted(_BLOCKED_MODULES))
     blocked_os = ", ".join(repr(m) for m in _BLOCKED_OS)
     return textwrap.dedent(f'''
-    import builtins, sys, os, socket as _sock
+    import builtins, sys, os, socket as _sock, importlib
     import ipaddress
     _WORKSPACE = r"{ws}"
     _NET_LOG = os.path.join(_WORKSPACE, ".net_blocked.log")
@@ -81,12 +81,12 @@ def _prelude(workspace: str) -> str:
             return None
     sys.meta_path.insert(0, _ImportBlocker())
 
-    _orig_import_module = importlib.import_module
+    _real_import_module = importlib.import_module
     def _safe_import_module(name, *a, **k):
         top = name.split('.')[0]
         if top in _ImportBlocker.BLOCK:
             raise ImportError("Blocked module in Sovereign sandbox: " + top)
-        return _orig_import_module(name, *a, **k)
+        return _real_import_module(name, *a, **k)
     importlib.import_module = _safe_import_module
     sys.modules["subprocess"] = None  # 'import subprocess' now raises ImportError
 

@@ -9,10 +9,10 @@ router = APIRouter()
 
 @router.get("")
 async def list_models() -> List[ModelInfo]:
-    from app.models.registry import model_registry
+    from app.models.registry import list_models
 
     models = []
-    for model_id, model in model_registry.list_models():
+    for model_id, model in list_models():
         models.append(
             ModelInfo(
                 id=model_id,
@@ -29,9 +29,9 @@ async def list_models() -> List[ModelInfo]:
 
 @router.get("/{model_id}")
 async def get_model(model_id: str) -> ModelInfo:
-    from app.models.registry import model_registry
+    from app.models.registry import get_model
 
-    model = model_registry.get_model(model_id)
+    model = get_model(model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
     return ModelInfo(

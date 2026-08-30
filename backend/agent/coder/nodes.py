@@ -23,6 +23,16 @@ from agent.coder.tools import parse_files
 logger = logging.getLogger(__name__)
 
 
+def _safe(value: str) -> str:
+    """Escape literal curly braces in model-generated text so it can be safely
+    embedded into a ``str.format`` template without raising ``KeyError``.
+
+    Local models frequently emit text containing ``{...}`` (e.g. dict/JSON
+    examples); treating those as format fields breaks the coding workflow.
+    """
+    return (value or "").replace("{", "{{").replace("}", "}}")
+
+
 def _format_sources(state: Dict[str, Any]) -> str:
     parts = []
     for name, content in (state.get("file_contents") or {}).items():
@@ -70,7 +80,7 @@ def generate_code(state: CoderState) -> Dict[str, Any]:
     start = time.time()
     raw = chat(
         prompts.GEN_SYSTEM,
-        prompts.GEN_USER.format(task=state["task"], plan=state.get("plan", "")),
+        prompts.GEN_USER.format(task=_safe(state["task"]), plan=_safe(state.get("plan", ""))),
         max_tokens=2048,
     )
     try:
@@ -140,8 +150,8 @@ def analyze_failure(state: CoderState) -> Dict[str, Any]:
     analysis = chat(
         prompts.ANALYZE_SYSTEM,
         prompts.ANALYZE_USER.format(
-            task=state["task"], test_output=test_out,
-            sources=_format_sources(state)),
+            task=_safe(state["task"]), test_output=_safe(test_out),
+            sources=_safe(_format_sources(state))),
         max_tokens=512,
     )
     return {
@@ -157,8 +167,8 @@ def fix_code(state: CoderState) -> Dict[str, Any]:
     raw = chat(
         prompts.FIX_SYSTEM,
         prompts.FIX_USER.format(
-            task=state["task"], analysis=state.get("failure_analysis", ""),
-            test_output=test_out, sources=_format_sources(state)),
+            task=_safe(state["task"]), analysis=_safe(state.get("failure_analysis", "")),
+            test_output=_safe(test_out), sources=_safe(_format_sources(state))),
         max_tokens=2048,
     )
     files = parse_files(raw)

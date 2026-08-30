@@ -9,7 +9,7 @@ def build_graph():
     g = StateGraph(CoderState)
 
     g.add_node("understand_task", nodes.understand_task)
-    g.add_node("plan", nodes.plan)
+    g.add_node("coder_plan", nodes.plan)
     g.add_node("generate_code", nodes.generate_code)
     g.add_node("write_workspace", nodes.write_workspace)
     g.add_node("run_tests", nodes.run_tests)
@@ -19,8 +19,8 @@ def build_graph():
     g.add_node("final", nodes.final_node)
 
     g.add_edge(START, "understand_task")
-    g.add_edge("understand_task", "plan")
-    g.add_edge("plan", "generate_code")
+    g.add_edge("understand_task", "coder_plan")
+    g.add_edge("coder_plan", "generate_code")
     g.add_edge("generate_code", "write_workspace")
     g.add_edge("write_workspace", "run_tests")
 
