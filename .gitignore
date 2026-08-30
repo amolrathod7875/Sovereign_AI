@@ -9,3 +9,12 @@ data/
 # Model cache (huggingface / download cache)
 .cache/
 **/.cache/
+
+# -----------------------------
+# Secrets — never commit local env files
+# -----------------------------
+.env
+.env.local
+.env.*
+!.env.example
+
