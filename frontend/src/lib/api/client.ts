@@ -224,6 +224,51 @@ export async function getNetworkEvents(limit = 100): Promise<NetworkEvent[]> {
   return data
 }
 
+export function createNetworkMonitorStream(
+  onEvent: (event: NetworkEvent) => void,
+  onError: (error: Error) => void,
+  onConnect: () => void,
+  onDisconnect: () => void
+): () => void {
+  const eventSource = new (window as any).EventSource(`${BASE_URL}/network/monitor`)
+  
+  eventSource.onopen = () => {
+    console.log('Network monitor SSE connected')
+    onConnect()
+  }
+  
+  eventSource.onmessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.data) as NetworkEvent
+      onEvent(data)
+    } catch (err) {
+      console.error('Failed to parse network event:', err)
+      onError(new Error('Failed to parse network event data'))
+    }
+  }
+  
+  eventSource.addEventListener('connection_attempt', (event: any) => {
+    try {
+      const data = JSON.parse(event.data) as NetworkEvent
+      onEvent(data)
+    } catch (err) {
+      console.error('Failed to parse connection_attempt event:', err)
+    }
+  })
+  
+  eventSource.onerror = (event: any) => {
+    console.error('Network monitor SSE error:', event)
+    onError(new Error('Network monitor connection failed'))
+    onDisconnect()
+  }
+  
+  // Return cleanup function
+  return () => {
+    eventSource.close()
+    onDisconnect()
+  }
+}
+
 export const apiClient = {
   getHealth,
   getSystemStatus,
@@ -242,6 +287,7 @@ export const apiClient = {
   listArtifacts,
   artifactDownloadUrl,
   getNetworkEvents,
+  createNetworkMonitorStream,
 }
 
 export default apiClient

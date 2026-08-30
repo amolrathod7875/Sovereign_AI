@@ -266,7 +266,11 @@ export interface NetworkEvent {
   destination_port: number
   action: string
   execution_id: string | null
+  process?: string
 }
+
+/** Network monitor connection states */
+export type NetworkMonitorState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
 /** backend/app/schemas/api.py :: ExecutionResponse */
 export interface ExecutionStep {
