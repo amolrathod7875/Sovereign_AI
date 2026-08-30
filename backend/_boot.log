@@ -23,3 +23,15 @@ INFO:     127.0.0.1:60687 - "POST /api/documents/upload HTTP/1.1" 200 OK
 INFO:     127.0.0.1:60688 - "GET /api/artifacts?limit=200 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:60689 - "POST /api/coder/run HTTP/1.1" 500 Internal Server Error
 INFO:     127.0.0.1:60696 - "POST /api/agent/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52865 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52867 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52877 - "GET /api/models/list HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52881 - "GET /api/models/route HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52935 - "POST /api/coder/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59631 - "POST /api/vision/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59635 - "POST /api/rag/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59637 - "POST /api/agent/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "POST /api/agent/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63435 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63447 - "GET /api/network/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51887 - "POST /api/vision/analyze HTTP/1.1" 200 OK
