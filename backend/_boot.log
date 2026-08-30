@@ -1,0 +1,25 @@
+INFO:     127.0.0.1:50598 - "GET /api/system/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50610 - "GET /api/system/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50611 - "GET /api/system/health HTTP/1.1" 200 OK
+resource module not available on Windows
+INFO:     127.0.0.1:50612 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50615 - "POST /api/models/route HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50623 - "GET /api/artifacts?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60694 - "GET /api/system/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60695 - "GET /api/system/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60696 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60707 - "GET /api/documents/formats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60708 - "POST /api/models/route HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60709 - "POST /api/documents/upload HTTP/1.1" 415 Unsupported Media Type
+INFO:     127.0.0.1:60710 - "GET /api/artifacts?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60711 - "POST /api/coder/run HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:60716 - "POST /api/agent/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60743 - "GET /api/system/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60744 - "GET /api/system/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60745 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60685 - "GET /api/documents/formats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60686 - "POST /api/models/route HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60687 - "POST /api/documents/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60688 - "GET /api/artifacts?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60689 - "POST /api/coder/run HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:60696 - "POST /api/agent/run HTTP/1.1" 200 OK

@@ -1,10 +1,22 @@
-from fastapi import APIRouter, HTTPException
-from sse_starlette.sse import EventSourceResponse
-import asyncio
-import json
+"""Chat surface.
+
+NOTE (Phase 6 integration fix): this module previously also declared
+``POST /agent/run`` and ``GET /agent/run/{task_id}/stream``, which were mounted at
+``/api`` and therefore resolved to ``/api/agent/run`` BEFORE the authoritative
+``app.api.agent`` router (mounted at ``/api/agent``). Because FastAPI matches
+routes in registration order, every call to ``POST /api/agent/run`` was served by
+``app.agents.graph.run_agent`` — the dead/placeholder duplicate documented in
+``reports/phase5d_architecture.md`` §2 — instead of the authoritative LangGraph
+agent in ``backend/agent``.
+
+Those two shadowing routes have been removed so ``/api/agent/run`` reaches the
+authoritative agent (``app.api.agent`` -> ``agent.run.run_agent_task``). No new
+agent, API or streaming protocol was introduced.
+"""
+from fastapi import APIRouter
 import logging
 
-from app.schemas import AgentRunRequest, ChatRequest, ChatResponse, ChatMessage
+from app.schemas import ChatRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -12,27 +24,14 @@ router = APIRouter()
 
 @router.post("/chat")
 async def chat(request: ChatRequest):
-    return {"message": "Chat endpoint - use /agent/run for full workflow"}
+    """Deprecated placeholder kept for backward compatibility.
 
-
-@router.post("/agent/run")
-async def agent_run(request: AgentRunRequest):
-    from app.agents.graph import run_agent
-
-    task_id = f"task_{asyncio.get_event_loop().time().__int__()}"
-    result = await run_agent(request, task_id)
-    return result
-
-
-@router.get("/agent/run/{task_id}/stream")
-async def agent_run_stream(task_id: str):
-    from app.agents.graph import agent_stream
-
-    async def event_generator():
-        async for event in agent_stream(task_id):
-            yield {
-                "event": event.get("type", "message"),
-                "data": json.dumps(event),
-            }
-
-    return EventSourceResponse(event_generator())
+    The real execution surface is ``POST /api/agent/run`` (maintenance /
+    knowledge / multimodal), ``POST /api/coder/run`` (coding) and
+    ``POST /api/vision/analyze`` (vision), selected by ``POST /api/models/route``.
+    """
+    return {
+        "message": "Deprecated. Use POST /api/agent/run, /api/coder/run or /api/vision/analyze.",
+        "routing_endpoint": "/api/models/route",
+        "streaming": False,
+    }

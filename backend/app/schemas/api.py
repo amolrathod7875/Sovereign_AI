@@ -80,12 +80,29 @@ class ChatResponse(BaseModel):
     artifact_id: Optional[str] = None
 
 
+class ComponentStatus(BaseModel):
+    """Honest, probed status of one authoritative platform component.
+
+    ``status`` is one of ONLINE / OFFLINE / UNAVAILABLE / NOT CONFIGURED and is
+    always derived from a real probe (see ``app.api.system``), never assumed.
+    """
+
+    id: str
+    name: str
+    status: str
+    detail: str = ""
+    endpoint: Optional[str] = None
+    local: bool = True
+
+
 class SystemStatus(BaseModel):
     sovereign: bool = True
     gpu: Optional[dict] = None
     services: dict
+    components: List[ComponentStatus] = []
     uptime_seconds: int
     external_api_calls: int = 0
+    blocked_connections: int = 0
 
 
 class NetworkEvent(BaseModel):
@@ -159,6 +176,30 @@ class DocumentUploadResponse(BaseModel):
     mime_type: str
     size: int
     checksum: str
+    # Absolute path of the stored file on the local machine. Required so the client
+    # can hand the SAME local file to the existing vision (`/api/vision/analyze`)
+    # and agent (`/api/agent/run`) endpoints, which take a local `file_path` /
+    # `image_path`. It never leaves the machine.
+    stored_path: Optional[str] = None
+    # Whether the authoritative parsers/vision tool accept this extension.
+    parse_supported: bool = False
+    vision_supported: bool = False
+
+
+class ArtifactInfo(BaseModel):
+    """A file already produced by the authoritative agent/tools.
+
+    The frontend only lists and downloads these; artifact *generation* stays in
+    ``agent/tools`` and ``app/tools``.
+    """
+
+    artifact_id: str
+    filename: str
+    kind: str
+    size: int
+    mime_type: str
+    modified_at: datetime
+    run_id: Optional[str] = None
 
 
 class DocumentResponse(BaseModel):
