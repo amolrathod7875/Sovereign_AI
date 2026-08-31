@@ -119,3 +119,40 @@ describe.skipIf(!backendUp)('Phase 6 E2E — real backend', () => {
     else expect(r.error.status === 0 || r.error.status >= 400).toBe(true)
   })
 })
+
+const VISION_TEST_IMAGE =
+  'D:\\Sovereign_AI\\PID_Dataset\\1__processed_data\\crops\\test\\176_10.jpg'
+
+describe.skipIf(!backendUp)('Phase 10.1 E2E — vision + RAG (real backend)', () => {
+  it('vision analyzes a local image with zero external calls', async () => {
+    const r = await withDeadline(
+      apiClient.analyzeVision({
+        file_path: VISION_TEST_IMAGE,
+        analysis_type: 'general',
+        prompt: 'Describe this image in one sentence.',
+      }),
+      INFERENCE_DEADLINE_MS,
+    )
+    expect(r.status).toBe('completed')
+    expect(r.external_calls).toBe(0)
+    expect(typeof r.model).toBe('string')
+    expect(r.model).toMatch(/VL/i)
+    expect(r.result).toBeTruthy()
+    const desc = r.result.description
+    expect(typeof desc === 'string' && desc.length > 0).toBe(true)
+  })
+
+  it('RAG retrieval returns local, cited chunks from the PID index', async () => {
+    const r = await withDeadline(
+      apiClient.searchRag({ query: 'pressure relief valve set pressure', top_k: 3 }),
+      INFERENCE_DEADLINE_MS,
+    )
+    expect(r.retriever).toMatch(/local|qdrant|bm25/i)
+    expect(Array.isArray(r.results)).toBe(true)
+    expect(r.results.length).toBeGreaterThan(0)
+    const c = r.results[0]
+    expect(c).toBeTruthy()
+    expect(typeof c.text === 'string' && c.text.length > 0).toBe(true)
+    expect(!!(c.source_file || c.asset_tag || c.chunk_id)).toBe(true)
+  })
+})
