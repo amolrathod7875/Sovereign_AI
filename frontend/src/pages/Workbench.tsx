@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import { apiClient, ApiError } from '../lib/api/client'
-import { modelDisplayName, cn } from '../lib/utils'
+import { modelDisplayName, cn, isVisionUnavailable } from '../lib/utils'
 import type {
   AgentRunResponse,
   CoderRunResponse,
@@ -505,30 +505,6 @@ function Row({
       <span className={cn('font-medium text-text-primary', valueClass)}>{value}</span>
     </div>
   )
-}
-
-export function isVisionUnavailable(
-  result: VisionAnalyzeResponse['result'] | null | undefined,
-  errors?: unknown[],
-): { unavailable: boolean; reason: string | null } {
-  if (!result) {
-    return { unavailable: true, reason: 'No visual analysis result was returned.' }
-  }
-  const uncertainItems = (result.uncertain_items as string[] | undefined) ?? []
-  const visionErrorItem = uncertainItems.find((u) => /vision_error/i.test(String(u))) ?? null
-  const errorList = (errors ?? []).map(String)
-  const visionErrorFromErrors = errorList.find((e) => /vision/i.test(e)) ?? null
-  const confidence = result.confidence ?? null
-
-  const unavailable =
-    confidence === 0 || visionErrorItem !== null || visionErrorFromErrors !== null
-
-  if (!unavailable) {
-    return { unavailable: false, reason: null }
-  }
-
-  const reason = visionErrorItem ?? visionErrorFromErrors ?? 'Visual analysis could not be completed.'
-  return { unavailable: true, reason }
 }
 
 export function VisionResult({

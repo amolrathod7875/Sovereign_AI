@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import type { VisionAnalyzeResponse } from './api/types'
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs))
@@ -63,4 +64,37 @@ export function formatDuration(ms: number | null | undefined): string {
   if (ms == null) return '—'
   if (ms < 1000) return `${Math.round(ms)} ms`
   return `${(ms / 1000).toFixed(1)} s`
+}
+
+/**
+ * Decide whether a vision analysis result must be disclosed as UNAVAILABLE.
+ *
+ * Pure presentation-layer helper only — it never changes the backend contract.
+ * The backend returns a non-null `vision_evidence[0]` even on failure
+ * (`confidence: 0`, `uncertain_items: ["vision_error: …"]`) plus a top-level
+ * `errors` entry, so a naive "result exists" check would falsely imply success
+ * under a top-level VERIFIED. This centralizes the honest disclosure rule.
+ */
+export function isVisionUnavailable(
+  result: VisionAnalyzeResponse['result'] | null | undefined,
+  errors?: unknown[],
+): { unavailable: boolean; reason: string | null } {
+  if (!result) {
+    return { unavailable: true, reason: 'No visual analysis result was returned.' }
+  }
+  const uncertainItems = (result.uncertain_items as string[] | undefined) ?? []
+  const visionErrorItem = uncertainItems.find((u) => /vision_error/i.test(String(u))) ?? null
+  const errorList = (errors ?? []).map(String)
+  const visionErrorFromErrors = errorList.find((e) => /vision/i.test(e)) ?? null
+  const confidence = result.confidence ?? null
+
+  const unavailable =
+    confidence === 0 || visionErrorItem !== null || visionErrorFromErrors !== null
+
+  if (!unavailable) {
+    return { unavailable: false, reason: null }
+  }
+
+  const reason = visionErrorItem ?? visionErrorFromErrors ?? 'Visual analysis could not be completed.'
+  return { unavailable: true, reason }
 }

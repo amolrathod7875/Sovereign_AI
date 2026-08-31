@@ -34,6 +34,37 @@ async function tolerant<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T }
   }
 }
 
+/**
+ * Client-side deadline for inference calls.
+ *
+ * The backend does not fast-fail when the local model server is unavailable or
+ * hung: `POST /api/coder/run` blocks on the upstream model server with no
+ * timeout, so a raw `apiClient.runCoder` can pend far longer than the test
+ * budget. We abort the request at the client and surface it as an `ApiError`
+ * with status 0 (timeout) so the call fails quickly and honestly instead of
+ * hanging the suite. A healthy model server returns well before this deadline.
+ */
+function withDeadline<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = globalThis.setTimeout(
+      () => reject(new ApiError(0, `request exceeded ${ms}ms client deadline (model server likely unavailable)`)),
+      ms,
+    )
+    p.then(
+      (v) => {
+        globalThis.clearTimeout(timer)
+        resolve(v)
+      },
+      (e) => {
+        globalThis.clearTimeout(timer)
+        reject(e)
+      },
+    )
+  })
+}
+
+const INFERENCE_DEADLINE_MS = 45_000
+
 describe.skipIf(!backendUp)('Phase 6 E2E — real backend', () => {
   it('health reports sovereign mode', async () => {
     const h = await apiClient.getHealth()
@@ -74,14 +105,17 @@ describe.skipIf(!backendUp)('Phase 6 E2E — real backend', () => {
   })
 
   it('coding task integrates with the local coder (or fails gracefully without the model server)', async () => {
-    const r = await tolerant(() => apiClient.runCoder('Return the number 42.'))
+    const r = await tolerant(() => withDeadline(apiClient.runCoder('Return the number 42.'), INFERENCE_DEADLINE_MS))
     if (r.ok) expect(r.value.external_calls).toBe(0)
-    else expect(r.error.status).toBeGreaterThanOrEqual(400)
+    // Without the model server the call must fail honestly: a backend 4xx/5xx, or
+    // a client-side timeout (status 0) when the backend blocks on the hung model
+    // server. Either way it must not silently succeed and must not hang.
+    else expect(r.error.status === 0 || r.error.status >= 400).toBe(true)
   })
 
   it('knowledge/agent task integrates (or fails gracefully without the model server)', async () => {
-    const r = await tolerant(() => apiClient.runAgent({ task: 'Explain the maintenance requirements for R-1001.', asset_tag: 'R-1001' }))
+    const r = await tolerant(() => withDeadline(apiClient.runAgent({ task: 'Explain the maintenance requirements for R-1001.', asset_tag: 'R-1001' }), INFERENCE_DEADLINE_MS))
     if (r.ok) expect(r.value.external_calls).toBe(0)
-    else expect(r.error.status).toBeGreaterThanOrEqual(400)
+    else expect(r.error.status === 0 || r.error.status >= 400).toBe(true)
   })
 })

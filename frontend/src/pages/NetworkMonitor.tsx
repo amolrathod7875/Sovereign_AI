@@ -11,20 +11,22 @@ export default function NetworkMonitor() {
   const [externalCallsLive, setExternalCallsLive] = useState<number | null>(null)
   const [blockedLive, setBlockedLive] = useState<number | null>(null)
 
-  // Helper to determine if a destination is local
-  const isLocalDestination = (host: string): boolean => {
-    return host === 'localhost' || 
-           host === '127.0.0.1' || 
-           host.startsWith('192.168.') ||
-           host.startsWith('10.') ||
-           host.startsWith('172.') ||
-           host.includes('qdrant') ||
-           host.includes('postgres') ||
-           host.includes('piston') ||
-           host.includes('vllm')
-  }
-
   useEffect(() => {
+    // Helper to determine if a destination is local. Defined inside the effect so
+    // its identity is stable (the effect runs once) and it is not a render-time
+    // dependency that would re-trigger the effect on every render.
+    const isLocalDestination = (host: string): boolean => {
+      return host === 'localhost' ||
+             host === '127.0.0.1' ||
+             host.startsWith('192.168.') ||
+             host.startsWith('10.') ||
+             host.startsWith('172.') ||
+             host.includes('qdrant') ||
+             host.includes('postgres') ||
+             host.includes('piston') ||
+             host.includes('vllm')
+    }
+
     let cleanup: (() => void) | null = null
 
     const initializeConnection = async () => {
@@ -71,7 +73,7 @@ export default function NetworkMonitor() {
     return () => {
       cleanup?.()
     }
-  }, [isLocalDestination])
+  }, [])
 
   const externalCalls = externalCallsLive ?? status?.external_api_calls ?? 0
   const blocked = blockedLive ?? status?.blocked_connections ?? 0

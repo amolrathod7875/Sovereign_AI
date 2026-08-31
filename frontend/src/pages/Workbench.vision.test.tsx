@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { isVisionUnavailable, VisionResult } from '../pages/Workbench'
+import { isVisionUnavailable } from '../lib/utils'
+import { VisionResult } from '../pages/Workbench'
 import type { VisionEvidence } from '../lib/api/types'
 
 const successResult: VisionEvidence = {
