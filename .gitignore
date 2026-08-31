@@ -11,10 +11,20 @@ data/
 **/.cache/
 
 # -----------------------------
+# Python-generated files
+# -----------------------------
+__pycache__/
+**/__pycache__/
+*.py[oc]
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# -----------------------------
 # Secrets — never commit local env files
 # -----------------------------
 .env
 .env.local
 .env.*
 !.env.example
-
+uploads/

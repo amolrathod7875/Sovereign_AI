@@ -42,6 +42,7 @@ interface ChatMessage {
   evidence?: Array<{ claim: string | null; source: string | null; document_type: string | null; confidence: number | null }>
   visionResult?: VisionAnalyzeResponse['result'] | null
   visionTags?: string[]
+  errors?: unknown[]
   coderFiles?: Record<string, string>
   coderTest?: CoderRunResponse['test_output']
   artifacts?: Array<{ id: string; name: string; kind: string }>
@@ -259,6 +260,7 @@ export default function Workbench() {
       evidence: finalRes.evidence,
       visionResult: finalRes.vision_evidence?.[0] ?? null,
       visionTags: finalRes.vision_tags,
+      errors: finalRes.errors,
       artifacts,
       externalCalls: finalRes.external_calls,
     }
@@ -429,7 +431,7 @@ function MessageView({ message }: { message: ChatMessage }) {
       </div>
 
       {message.visionResult && (
-        <VisionResult result={message.visionResult} tags={message.visionTags} />
+        <VisionResult result={message.visionResult} tags={message.visionTags} errors={message.errors} />
       )}
 
       {message.evidence && message.evidence.length > 0 && <EvidenceList evidence={message.evidence} />}
@@ -505,18 +507,62 @@ function Row({
   )
 }
 
-function VisionResult({
+export function isVisionUnavailable(
+  result: VisionAnalyzeResponse['result'] | null | undefined,
+  errors?: unknown[],
+): { unavailable: boolean; reason: string | null } {
+  if (!result) {
+    return { unavailable: true, reason: 'No visual analysis result was returned.' }
+  }
+  const uncertainItems = (result.uncertain_items as string[] | undefined) ?? []
+  const visionErrorItem = uncertainItems.find((u) => /vision_error/i.test(String(u))) ?? null
+  const errorList = (errors ?? []).map(String)
+  const visionErrorFromErrors = errorList.find((e) => /vision/i.test(e)) ?? null
+  const confidence = result.confidence ?? null
+
+  const unavailable =
+    confidence === 0 || visionErrorItem !== null || visionErrorFromErrors !== null
+
+  if (!unavailable) {
+    return { unavailable: false, reason: null }
+  }
+
+  const reason = visionErrorItem ?? visionErrorFromErrors ?? 'Visual analysis could not be completed.'
+  return { unavailable: true, reason }
+}
+
+export function VisionResult({
   result,
   tags,
+  errors,
 }: {
   result: VisionAnalyzeResponse['result']
   tags?: string[]
+  errors?: unknown[]
 }) {
+  const { unavailable, reason } = isVisionUnavailable(result, errors)
+
+  if (unavailable) {
+    return (
+      <div className="ml-4 rounded-lg border border-accent-danger/40 bg-accent-danger/10 p-3">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-accent-danger mb-1">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          VISION ANALYSIS UNAVAILABLE
+        </p>
+        {reason && <p className="text-xs text-text-secondary">{reason}</p>}
+        <p className="mt-1 text-[10px] text-text-secondary">
+          No visual evidence was obtained. Any answer shown is based on knowledge retrieval only and does
+          not include visual verification.
+        </p>
+      </div>
+    )
+  }
+
   const findings = (result?.findings as string[] | undefined) ?? []
   const entities = (result?.entities as Array<{ type?: string; name?: string }> | undefined) ?? []
   return (
     <div className="ml-4 rounded-lg border border-border bg-background-tertiary p-3">
-      <p className="text-xs font-semibold text-text-primary mb-1">VISUAL ANALYSIS</p>
+      <p className="text-xs font-semibold text-accent-success mb-1">VISUAL ANALYSIS · AVAILABLE</p>
       <p className="text-xs text-text-secondary mb-2">{result?.description}</p>
       {findings.length > 0 && (
         <ul className="list-disc pl-4 text-xs text-text-primary space-y-0.5">
