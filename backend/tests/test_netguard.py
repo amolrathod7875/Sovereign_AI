@@ -197,3 +197,174 @@ def test_local_endpoint_guard_rejects_external():
         _assert_local_endpoint("http://1.2.3.4/v1")
     _assert_local_endpoint("http://localhost:8003/v1")
     _assert_local_endpoint("http://127.0.0.1:8003/v1")
+
+
+# ==================================================================
+# Phase 10.3 — NetworkGuard sovereignty boundary hardening
+# ==================================================================
+from agent.security.netguard import _is_local_host, _TRUSTED_NETWORKS
+from app.models.registry import is_local_endpoint
+
+
+# A. Loopback remains local ----------------------------------------------------
+@pytest.mark.parametrize("host", [
+    "127.0.0.1",
+    "127.0.0.2",
+    "127.255.255.254",
+    "::1",
+    "localhost",
+])
+def test_loopback_is_local(host):
+    assert _is_local_host(host) is True
+
+
+# B. RFC1918 remains local -----------------------------------------------------
+@pytest.mark.parametrize("host", [
+    "10.0.0.1",
+    "10.255.255.254",
+    "172.16.0.1",
+    "172.31.255.254",
+    "192.168.0.1",
+    "192.168.255.254",
+])
+def test_rfc1918_is_local(host):
+    assert _is_local_host(host) is True
+
+
+# C. 169.254.0.0/16 is NOT local (link-local / cloud metadata) ----------------
+@pytest.mark.parametrize("host", [
+    "169.254.169.254",  # cloud instance metadata endpoint
+    "169.254.1.1",
+    "169.254.0.1",
+    "169.254.255.254",
+])
+def test_linklocal_not_local(host):
+    assert _is_local_host(host) is False
+
+
+# D. RFC5737 documentation ranges are NOT local -------------------------------
+@pytest.mark.parametrize("host", [
+    "192.0.2.1",
+    "192.0.2.100",
+    "198.51.100.1",
+    "198.51.100.100",
+    "203.0.113.1",
+    "203.0.113.100",
+])
+def test_documentation_ranges_not_local(host):
+    assert _is_local_host(host) is False
+
+
+# E. RFC2544 benchmark ranges are NOT local -----------------------------------
+@pytest.mark.parametrize("host", [
+    "198.18.0.1",
+    "198.19.0.1",
+    "198.18.255.254",
+    "198.19.255.254",
+])
+def test_benchmark_ranges_not_local(host):
+    assert _is_local_host(host) is False
+
+
+# F. IPv6 link-local is NOT local ---------------------------------------------
+@pytest.mark.parametrize("host", [
+    "fe80::1",
+    "fe80::1234",
+    "fe80::abcd:ef01:2345:6789",
+])
+def test_ipv6_linklocal_not_local(host):
+    assert _is_local_host(host) is False
+
+
+# G. IPv6 ULA is NOT local -----------------------------------------------------
+@pytest.mark.parametrize("host", [
+    "fc00::1",
+    "fd00::1",
+    "fd12:3456:789a::1",
+])
+def test_ipv6_ula_not_local(host):
+    assert _is_local_host(host) is False
+
+
+# H. Special/reserved addresses are NOT local ---------------------------------
+@pytest.mark.parametrize("host", [
+    "0.0.0.0",           # unspecified
+    "255.255.255.255",   # broadcast
+    "224.0.0.1",         # multicast
+    "240.0.0.1",         # reserved
+    "192.0.0.1",         # IETF Protocol Assignments
+    "100.64.0.1",        # CGNAT (shared address space)
+])
+def test_special_reserved_not_local(host):
+    assert _is_local_host(host) is False
+
+
+# I. is_local_endpoint: trusted local URLs continue to work -------------------
+@pytest.mark.parametrize("url", [
+    "http://localhost:8002/v1",
+    "http://127.0.0.1:8002/v1",
+    "http://10.0.0.5:8002/v1",
+    "http://172.16.0.5:8002/v1",
+    "http://192.168.1.5:8002/v1",
+])
+def test_registry_local_endpoints_accepted(url):
+    assert is_local_endpoint(url) is True
+
+
+# J. is_local_endpoint: external/special URLs are rejected --------------------
+@pytest.mark.parametrize("url", [
+    "http://169.254.169.254/latest/meta-data/",
+    "http://192.0.2.1/v1",
+    "http://198.51.100.1/v1",
+    "http://203.0.113.1/v1",
+    "http://198.18.0.1/v1",
+    "http://8.8.8.8/v1",
+    "http://example.com/v1",
+])
+def test_registry_external_endpoints_rejected(url):
+    assert is_local_endpoint(url) is False
+
+
+# K. Hostname lookalikes are not accidentally trusted -------------------------
+@pytest.mark.parametrize("host", [
+    "evil-qdrant.example.com",
+    "postgres.evil.com",
+    "qdrant.attacker.net",
+    "piston.malicious.org",
+    "vllm.phishing.com",
+])
+def test_hostname_lookalikes_not_trusted(host):
+    # These hostnames require DNS resolution and should NOT be trusted
+    assert _is_local_host(host) is False
+
+
+# L. Network boundary contract ------------------------------------------------
+def test_network_boundary_contract_local_permitted():
+    """Local destinations must be classified as local (permitted)."""
+    with NetworkGuard() as guard:
+        # 127.0.0.1 is trusted loopback - should not increment external_calls
+        # (actual connection may fail if nothing is listening, but classification
+        # must allow it through to the real socket)
+        try:
+            s = socket.create_connection(("127.0.0.1", 1), timeout=0.1)
+            s.close()
+        except (ConnectionRefusedError, OSError):
+            pass  # Connection refused is fine - classification allowed it
+    assert guard.external_calls == 0
+
+
+def test_network_boundary_contract_external_blocked():
+    """External destinations must be classified as external (blocked)."""
+    with NetworkGuard() as guard:
+        with pytest.raises(ConnectionError):
+            socket.create_connection(("169.254.169.254", 80), timeout=0.1)
+    assert guard.external_calls >= 1
+    assert "169.254.169.254" in guard.blocked
+
+
+def test_network_boundary_contract_cloud_metadata_blocked():
+    """Cloud metadata endpoint (169.254.169.254) MUST be blocked."""
+    with NetworkGuard() as guard:
+        with pytest.raises(ConnectionError):
+            socket.create_connection(("169.254.169.254", 80), timeout=0.1)
+    assert guard.external_calls >= 1

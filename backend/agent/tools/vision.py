@@ -26,6 +26,7 @@ Returns a structured dict:
     }
 """
 import base64
+import ipaddress
 import json
 import logging
 import os
@@ -83,10 +84,26 @@ def validate_path(file_path: str) -> Path:
 # ---------------------------------------------------------------------------
 # Local endpoint guard
 # ---------------------------------------------------------------------------
+# Trusted local application networks: loopback + RFC1918 only.
+# Explicitly excludes link-local (169.254/16), documentation ranges,
+# benchmark ranges, IPv6 link-local, IPv6 ULA, multicast, reserved, etc.
+_TRUSTED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),      # IPv4 loopback
+    ipaddress.ip_network("10.0.0.0/8"),        # RFC1918
+    ipaddress.ip_network("172.16.0.0/12"),     # RFC1918
+    ipaddress.ip_network("192.168.0.0/16"),    # RFC1918
+    ipaddress.ip_network("::1/128"),           # IPv6 loopback
+]
+
+
 def _assert_local_endpoint(url: str) -> None:
-    """Refuse to send image bytes to any non-loopback / non-private endpoint."""
+    """Refuse to send image bytes to any non-trusted-local endpoint.
+
+    Trusted = loopback (127.0.0.0/8, ::1) or RFC1918 private networks.
+    Everything else (link-local, documentation, benchmark, IPv6 link-local/ULA,
+    multicast, reserved, unresolvable hostnames) is rejected.
+    """
     from urllib.parse import urlparse
-    import ipaddress
 
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()
@@ -94,7 +111,7 @@ def _assert_local_endpoint(url: str) -> None:
         return
     try:
         ip = ipaddress.ip_address(host)
-        if ip.is_loopback or ip.is_private:
+        if any(ip in net for net in _TRUSTED_NETWORKS):
             return
     except ValueError:
         # Unresolved hostname — do not trust (could require DNS / external net).
@@ -103,7 +120,7 @@ def _assert_local_endpoint(url: str) -> None:
             f"Vision inference must remain local."
         )
     raise ConnectionError(
-        f"Vision endpoint '{url}' is not loopback/private. "
+        f"Vision endpoint '{url}' is not a trusted local address. "
         f"Vision inference must remain local (sovereignty)."
     )
 

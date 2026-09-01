@@ -20,6 +20,18 @@ from typing import List, Optional
 
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
+# Trusted local application networks: loopback + RFC1918 only.
+# Explicitly excludes link-local (169.254/16), documentation ranges
+# (192.0.2/24, 198.51.100/24, 203.0.113/24), benchmark ranges (198.18/15),
+# IPv6 link-local (fe80::/10), IPv6 ULA (fc00::/7), multicast, reserved, etc.
+_TRUSTED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),      # IPv4 loopback
+    ipaddress.ip_network("10.0.0.0/8"),        # RFC1918
+    ipaddress.ip_network("172.16.0.0/12"),     # RFC1918
+    ipaddress.ip_network("192.168.0.0/16"),    # RFC1918
+    ipaddress.ip_network("::1/128"),           # IPv6 loopback
+]
+
 # Saved `socket.socket` classes, one entry per active (nested) guard layer.
 # On exit each layer restores `socket.socket` to the value it saved, so the
 # outermost layer returns the global to its original state (no leakage).
@@ -35,19 +47,27 @@ _REAL_SOCKET: Optional[type] = None
 
 
 def _is_local_host(host: str) -> bool:
-    """True for loopback / private / explicitly-local addresses.
+    """True only for explicitly trusted local application destinations.
 
-    Anything else (public IP, unresolved hostname) is treated as external and
-    must be blocked for network sovereignty.
+    Trusted = loopback (127.0.0.0/8, ::1) or RFC1918 private networks
+    (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16).
+
+    Everything else is treated as external and blocked:
+      - link-local (169.254.0.0/16) including cloud metadata (169.254.169.254)
+      - documentation ranges (192.0.2/24, 198.51.100/24, 203.0.113/24)
+      - benchmark ranges (198.18.0.0/15)
+      - IPv6 link-local (fe80::/10)
+      - IPv6 ULA (fc00::/7)
+      - multicast, reserved, unspecified, broadcast
+      - any hostname requiring DNS resolution
     """
     if host in _LOCAL_HOSTS:
         return True
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
-        # Could not resolve to an IP -> would require DNS / external network.
         return False
-    return ip.is_loopback or ip.is_private
+    return any(ip in net for net in _TRUSTED_NETWORKS)
 
 
 def _guarded_connect(self, address, *args, **kwargs):

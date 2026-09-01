@@ -36,12 +36,28 @@ from app.config import settings
 # ---------------------------------------------------------------------------
 # Local-endpoint sovereignty guard
 # ---------------------------------------------------------------------------
-def is_local_endpoint(url: str) -> bool:
-    """Return True iff ``url`` resolves to a loopback or private (RFC1918) host.
+# Trusted local application networks: loopback + RFC1918 only.
+# Explicitly excludes link-local (169.254/16), documentation ranges,
+# benchmark ranges, IPv6 link-local, IPv6 ULA, multicast, reserved, etc.
+_TRUSTED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),      # IPv4 loopback
+    ipaddress.ip_network("10.0.0.0/8"),        # RFC1918
+    ipaddress.ip_network("172.16.0.0/12"),     # RFC1918
+    ipaddress.ip_network("192.168.0.0/16"),    # RFC1918
+    ipaddress.ip_network("::1/128"),           # IPv6 loopback
+]
 
-    Public / external hosts are rejected so model inference can never leave the
-    machine. Unresolvable hostnames are treated as NON-local (they would require
-    DNS / external network) and therefore rejected.
+
+def is_local_endpoint(url: str) -> bool:
+    """Return True iff ``url`` resolves to a loopback or RFC1918 host.
+
+    Only explicitly trusted local application destinations are permitted:
+      - loopback: 127.0.0.0/8, ::1
+      - RFC1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+
+    Everything else is rejected so model inference can never leave the
+    machine. Unresolvable hostnames are treated as NON-local (they would
+    require DNS / external network) and therefore rejected.
     """
     if not url:
         return False
@@ -53,7 +69,7 @@ def is_local_endpoint(url: str) -> bool:
         ip = ipaddress.ip_address(host)
     except ValueError:
         return False  # hostname that needs DNS resolution -> not local
-    return ip.is_loopback or ip.is_private
+    return any(ip in net for net in _TRUSTED_NETWORKS)
 
 
 def validate_local_endpoint(url: str) -> None:
