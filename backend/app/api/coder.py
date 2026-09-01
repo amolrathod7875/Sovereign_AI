@@ -19,11 +19,16 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.schemas import RoutingDecision
+from agent.coder.config import CODER_MODEL_TIMEOUT
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _RUNS: Dict[str, Any] = {}
+
+# End-to-end deadline for the complete coder workflow.
+# Allows multiple model calls + test iterations while preventing indefinite hangs.
+CODER_DEADLINE = max(CODER_MODEL_TIMEOUT * 3, 900)  # at least 15 minutes
 
 
 class CoderRunRequest(BaseModel):
@@ -56,7 +61,21 @@ async def run_coder(req: CoderRunRequest):
     run_id = f"coder_{uuid.uuid4().hex[:12]}"
     try:
         # The model runs in a thread so we never block the event loop.
-        result = await asyncio.to_thread(run_coder_task, req.task, run_id)
+        # Application-level deadline prevents indefinite hangs on CPU-only inference.
+        result = await asyncio.wait_for(
+            asyncio.to_thread(run_coder_task, req.task, run_id),
+            timeout=CODER_DEADLINE,
+        )
+    except asyncio.TimeoutError:
+        logger.error("coder run timed out after %ds: %s", CODER_DEADLINE, req.task[:100])
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                f"Coder workflow exceeded {CODER_DEADLINE}s deadline. "
+                "The local model may be overloaded or the task too complex. "
+                "Try a simpler task or check the model server."
+            ),
+        )
     except Exception as e:  # surface failures clearly
         logger.error("coder run failed: %s", e)
         raise HTTPException(status_code=500, detail=f"coder run failed: {e}")

@@ -67,7 +67,15 @@ async def analyze(req: VisionAnalyzeRequest):
         # Path denied / unsupported type — never leak internals.
         raise HTTPException(status_code=400, detail=str(e))
     except ConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Local vision model (Qwen2.5-VL) is not reachable on "
+                f"{VISION_ENDPOINT}. Start it with "
+                f"'python scripts/serve_model.py --model-id qwen-vision ... --port 8003'. "
+                f"Original error: {e}"
+            ),
+        )
     except Exception as e:
         msg = str(e)
         # An unreachable local llama.cpp server surfaces as an OpenAI APIConnectionError.

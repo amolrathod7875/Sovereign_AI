@@ -591,7 +591,13 @@ def _analyze_pdf(path: Path, prompt: Optional[str], at: str, start: float) -> Di
         rendered = render_pdf_pages(path, PDF_MAX_PAGES)
         if not rendered:
             raise ValueError(f"Could not render any pages from PDF: {path}")
+        # Total deadline for multi-page PDF analysis to prevent timeout multiplication.
+        pdf_deadline = start + VISION_TIMEOUT * 2
         for pg in rendered:
+            if time.time() > pdf_deadline:
+                logger.warning("PDF analysis deadline reached at page %d/%d",
+                               pg["page"], len(rendered))
+                break
             prompt_used = build_prompt(at, prompt)
             content = [
                 {"type": "image_url",
