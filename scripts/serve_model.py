@@ -84,6 +84,10 @@ def main():
     p.add_argument("--model-path", required=True)
     p.add_argument("--mmproj", default=None)
     p.add_argument("--chat-format", default=None)
+    # Production defaults (validated Phases 11.4-11.8 on RTX 4050):
+    #   coder:  --n-gpu-layers 40 --n-ctx 2048
+    #   vision: --n-gpu-layers 99 --n-ctx 2048
+    # See backend/app.config Settings class for the canonical values.
     p.add_argument("--n-ctx", type=int, default=4096)
     p.add_argument("--n-gpu-layers", type=int, default=0)
     p.add_argument("--host", default="0.0.0.0")

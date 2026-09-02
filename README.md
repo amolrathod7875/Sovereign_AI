@@ -79,7 +79,7 @@ and the CPU prebuilt wheel is cached at
 `_rollback/llama_cpp_python-0.3.35-cpu-py3-none-win_amd64.whl` as a
 known-good fallback.
 
-### Vision — CPU validated, CUDA pending
+### Vision — verified on RTX 4050
 
 | Item         | Value                                                              |
 |--------------|--------------------------------------------------------------------|
@@ -87,8 +87,13 @@ known-good fallback.
 | mmproj       | `mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf` (~0.8 GB)                |
 | Endpoint     | `http://localhost:8003/v1` (chat-format `qwen2-vl`)                |
 | Server       | `python scripts/serve_model.py --model-id qwen-vision --port 8003` |
-| CPU inference| **Validated**                                                      |
-| CUDA inference| **Not yet validated** — `n_gpu_layers` flag is wired but the VLM path has not been benchmarked on RTX 4050 |
+| Runtime      | **llama-cpp-python 0.3.35** + CUDA 12.4 + AVX2                     |
+| GPU          | NVIDIA RTX 4050, compute capability 8.9 (sm_89)                    |
+| CPU          | AMD Ryzen 5 5600G — **AVX2 yes, AVX-512 no**                       |
+| Build        | `GGML_CUDA=ON`, `GGML_AVX2=ON`, `GGML_AVX512=OFF`, `CMAKE_CUDA_ARCHITECTURES=89` |
+| Measured VRAM (all layers on GPU) | peak ~5 832 MiB (validated for tested workload; monitor VRAM under production workloads) |
+| Measured throughput | **~23.3 tokens/sec** with `n_gpu_layers=99`, n_ctx=2048       |
+| Status       | **CUDA-accelerated local vision inference experimentally validated on RTX 4050** |
 
 ### General — server present, weights absent
 
@@ -111,7 +116,7 @@ make this path live without any code change.
 |---------------|-------------------------------|-----------------------|--------------------------------------------------|---------------------------------------|
 | `general`     | Qwen2.5-3B-Instruct           | `:8001/v1`            | **absent**                                       | standby (no server)                   |
 | `qwen-coder`  | Qwen2.5-Coder-3B-Instruct     | `:8002/v1`            | `models/qwen-coder/qwen2.5-coder-3b-instruct-q4_k_m.gguf` (1.96 GB) | online — **CUDA validated on RTX 4050** |
-| `vision`      | Qwen2.5-VL-3B-Instruct        | `:8003/v1`            | `models/qwen-vision/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf` (1.80 GB) + `mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf` (0.79 GB) | online — **CPU validated, CUDA pending** |
+| `vision`      | Qwen2.5-VL-3B-Instruct        | `:8003/v1`            | `models/qwen-vision/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf` (1.80 GB) + `mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf` (0.79 GB) | online — **CUDA validated on RTX 4050** |
 | `embedding`   | BGE-large-en-v1.5             | local                 | `sentence-transformers/all-MiniLM-L6-v2` (384-d) | online                                |
 | `reranker`    | BGE-reranker-large            | local                 | local reranker                                   | online                                |
 
@@ -218,16 +223,16 @@ The CUDA build of llama-cpp-python is installed in the
 servers on bare metal, then the backend:
 
 ```bash
-# Terminal 1: coder (CUDA, all layers on GPU)
+# Terminal 1: coder (CUDA, ngl=40 validated)
 python scripts/serve_model.py --model-id qwen-coder \
     --model-path models/qwen-coder/qwen2.5-coder-3b-instruct-q4_k_m.gguf \
-    --port 8002 --n-gpu-layers 99 --n-ctx 2048
+    --port 8002 --n-gpu-layers 40 --n-ctx 2048
 
-# Terminal 2: vision (CPU first; CUDA pending validation)
+# Terminal 2: vision (CUDA, ngl=99 validated)
 python scripts/serve_model.py --model-id qwen-vision \
     --model-path models/qwen-vision/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf \
     --mmproj models/qwen-vision/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf \
-    --chat-format qwen2-vl --port 8003
+    --chat-format qwen2-vl --port 8003 --n-gpu-layers 99 --n-ctx 2048
 
 # Terminal 3: backend
 cd backend
@@ -356,15 +361,14 @@ inference-reliability regressions (12 cases).
   entry, router path, and `/api/system/status` are all in place; a
   small Qwen 2.5 3B Instruct GGUF still needs to be downloaded into
   `models/qwen-general/`.
-- **Vision CUDA has not been validated.** The `n_gpu_layers` flag
-  flows from `serve_model.py` into the underlying `Llama(...)`
-  constructor, but the VLM path on RTX 4050 has not been benchmarked
-  yet. Treat vision inference as CPU-only until that validation
-  completes.
-- **GPU concurrency is not validated.** The deployment plan loads
-  one GGUF at a time on the 6 GB RTX 4050 (sequential loading via
-  per-model servers); concurrent multi-model GPU inference has not
-  been measured.
+- **Vision CUDA is VRAM-constrained.** Validated for the tested workload
+  (Qwen2.5-VL-3B-Instruct Q4_K_M, peak ~5 832 MiB on RTX 4050). Monitor
+  VRAM under production workloads; arbitrary high-resolution workloads
+  have not been tested.
+- **GPU concurrency is conditional.** Concurrent multi-model GPU
+  inference was tested with peak VRAM 5 699–5 771 MiB (under the
+  5 800 MiB safety limit). Production concurrency should be monitored
+  and is not guaranteed under arbitrary workloads.
 - **PaddleOCR is in a separate environment.** The Qdrant client pins
   `protobuf<6`, which conflicts with `paddlepaddle>=2.5`. PaddleOCR
   is installed and exercised in its own environment per
@@ -384,9 +388,9 @@ inference-reliability regressions (12 cases).
 | RAG (Qdrant + BM25)    | 393 chunks, weighted hybrid, citations   | Re-rank tuning                                    |
 | NetworkGuard           | explicit trusted-local CIDRs            | Maintain                                          |
 | Coder (Qwen2.5-Coder)  | CPU + CUDA on RTX 4050 validated         | (optional) larger coder / context experiments     |
-| Vision (Qwen2.5-VL)    | CPU validated                            | **CUDA validation on RTX 4050 (P11.5/12)**       |
+| Vision (Qwen2.5-VL)    | **CPU + CUDA on RTX 4050 validated**     | Monitor VRAM under production workloads           |
 | General LLM            | router + endpoint reserved, weights absent | **Provision Qwen 2.5 3B Instruct GGUF**         |
-| GPU concurrency        | one model at a time (validated)          | None planned (single 6 GB GPU)                    |
+| GPU concurrency        | conditional (tested peak 5 699–5 771 MiB) | Monitor under production workloads                |
 | E2E harness            | per-phase suites + agent E2E             | Expand vision CUDA E2E once vision-GPU validated  |
 | 4 golden demos         | inspection-approval, data-analysis, multimodal, correspondence-search | Re-run all 4 against the CUDA coder |
 

@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     # Used by the local coding agent so it never leaves the machine.
     CODER_ENDPOINT: str = "http://localhost:8002/v1"
 
+    # Production GPU configuration (validated Phases 11.4-11.8 on RTX 4050).
+    # These are the recommended --n-gpu-layers / --n-ctx values for scripts/serve_model.py.
+    CODER_N_GPU_LAYERS: int = 40
+    CODER_N_CTX: int = 2048
+    VISION_N_GPU_LAYERS: int = 99
+    VISION_N_CTX: int = 2048
+
     EMBEDDING_MODEL: str = "/models/embedding"
     RERANKER_MODEL: str = "/models/reranker"
 
