@@ -9,6 +9,11 @@ from app.models.registry import update_model_status
 logger = logging.getLogger(__name__)
 
 
+class ModelClientError(Exception):
+    """Raised when the local model returns a malformed or invalid response."""
+    pass
+
+
 class ModelClient:
     def __init__(self, model_id: str, endpoint: str):
         self.model_id = model_id
@@ -37,7 +42,23 @@ class ModelClient:
             )
             response.raise_for_status()
             result = response.json()
-            return result["choices"][0]["message"]["content"]
+
+            # Validate response structure for OpenAI-compatible API
+            if not isinstance(result, dict):
+                raise ModelClientError(f"Model {self.model_id} returned non-JSON response")
+
+            if "choices" not in result or not isinstance(result["choices"], list) or len(result["choices"]) == 0:
+                raise ModelClientError(f"Model {self.model_id} response missing or invalid 'choices' field")
+
+            first_choice = result["choices"][0]
+            if not isinstance(first_choice, dict) or "message" not in first_choice:
+                raise ModelClientError(f"Model {self.model_id} response missing 'message' in choices")
+
+            message = first_choice["message"]
+            if not isinstance(message, dict) or "content" not in message:
+                raise ModelClientError(f"Model {self.model_id} response missing 'content' in message")
+
+            return message["content"]
         except Exception as e:
             logger.error(f"Model inference error for {self.model_id}: {e}")
             raise

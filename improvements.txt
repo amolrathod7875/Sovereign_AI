@@ -1,0 +1,13 @@
+login --- frontend
+postgresSQL/ JWT --backend
+
+monolithic glitch -- microlithic arci
+
+
+prerequisties
+A. RAG
+A.1 Adding Embedding.md 
+A.2 Adding Chunking.md
+
+human-policies 
+security-policies

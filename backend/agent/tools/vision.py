@@ -52,6 +52,7 @@ from agent.utils import now_iso
 
 logger = logging.getLogger(__name__)
 
+
 # Status labels the model is instructed to use for every extracted element.
 _STATUS_LABELS = ("verified", "probable", "uncertain", "not_visible", "conflict")
 
@@ -59,6 +60,11 @@ _STATUS_LABELS = ("verified", "probable", "uncertain", "not_visible", "conflict"
 # ---------------------------------------------------------------------------
 # Path safety
 # ---------------------------------------------------------------------------
+class VisionUpstreamResponseError(Exception):
+    """Raised when the local vision model returns a malformed or invalid response."""
+    pass
+
+
 def validate_path(file_path: str) -> Path:
     """Resolve and authorize a vision input path. Raises on missing/denied."""
     if not file_path:
@@ -79,7 +85,6 @@ def validate_path(file_path: str) -> Path:
             f"Vision tool may only read approved project paths."
         )
     return p
-
 
 # ---------------------------------------------------------------------------
 # Local endpoint guard
@@ -534,13 +539,9 @@ def analyze_image(
         raw_text = _call_vlm(content, max_tokens=500)
         raw = _extract_json(raw_text)
         if raw is None:
-            raw = {"description": "(VLM output was not valid JSON; raw text kept in structured.raw_text)",
-                   "raw_text": raw_text, "findings": [],
-                   "entities": [], "uncertain_items": ["model_output_not_json"]}
-        result = _structure_result("pid", raw, source_file, prompt_used)
-        result["pages"] = [{"page": 1, "source": source_file}]
-        result["execution_time_s"] = round(time.time() - start, 3)
-        return result
+            raise VisionUpstreamResponseError(
+                f"Model returned empty or malformed JSON. Raw output: {raw_text[:200]}"
+            )
 
     if path.suffix.lower() == ".pdf":
         return _analyze_pdf(path, prompt, at, start)
@@ -555,9 +556,9 @@ def analyze_image(
     raw_text = _call_vlm(content, max_tokens=450)
     raw = _extract_json(raw_text)
     if raw is None:
-        raw = {"description": "(VLM output was not valid JSON; raw text kept in structured.raw_text)",
-               "raw_text": raw_text, "findings": [],
-               "entities": [], "uncertain_items": ["model_output_not_json"]}
+        raise VisionUpstreamResponseError(
+            f"Model returned empty or malformed JSON. Raw output: {raw_text[:200]}"
+        )
     result = _structure_result(at, raw, source_file, prompt_used)
     result["pages"] = [{"page": 1, "source": source_file}]
     result["execution_time_s"] = round(time.time() - start, 3)
@@ -581,8 +582,9 @@ def _analyze_pdf(path: Path, prompt: Optional[str], at: str, start: float) -> Di
         raw_text = _call_vlm(content, max_tokens=450)
         raw = _extract_json(raw_text)
         if raw is None:
-            raw = {"description": "(VLM output not valid JSON; raw text in structured.raw_text)",
-                   "raw_text": raw_text}
+            raise VisionUpstreamResponseError(
+                f"Model returned empty or malformed JSON. Raw output: {raw_text[:200]}"
+            )
         raw["_text_extracted"] = True
         raw_parts.append(raw)
         pages_meta.append({"page": "all", "source": source_file, "mode": "text"})

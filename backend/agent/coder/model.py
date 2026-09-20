@@ -15,6 +15,10 @@ from agent.coder.config import CODER_MODEL_ID, CODER_ENDPOINT, CODER_MODEL_TIMEO
 logger = logging.getLogger(__name__)
 
 
+# Import the exception that ModelClient should raise
+from app.models.client import ModelClientError
+
+
 def complete(
     messages: List[Dict[str, str]],
     temperature: float = 0.1,

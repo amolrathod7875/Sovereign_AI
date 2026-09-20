@@ -1,16 +1,3 @@
-"""FastAPI integration for the local vision tool.
-
-Reuses the SINGLE vision tool implemented in ``agent.tools.vision`` (the same one
-the LangGraph agent uses), so there is one tool system, not a parallel one.
-
-Exposes:
-  POST /api/vision/analyze   -> analyze an approved local image/PDF with the local VLM
-
-Phase 6 change (integration only): the call runs in a worker thread wrapped in the
-EXISTING ``agent.security.netguard`` guard, so (a) a 60-100 s CPU-bound VLM call no
-longer blocks the event loop and (b) the response carries a *measured*
-``external_calls`` count instead of an assumed one.
-"""
 import asyncio
 import logging
 import time
@@ -53,7 +40,7 @@ def _analyze_guarded(file_path: str, prompt: Optional[str], analysis_type: str) 
 
 @router.post("/analyze", response_model=VisionAnalyzeResponse)
 async def analyze(req: VisionAnalyzeRequest):
-    from agent.tools.vision import VISION_MODEL_NAME
+    from agent.tools.vision import VISION_MODEL_NAME, VisionUpstreamResponseError
     from agent.config import VISION_ENDPOINT
 
     t0 = time.time()
@@ -66,14 +53,31 @@ async def analyze(req: VisionAnalyzeRequest):
     except (PermissionError, ValueError, IsADirectoryError) as e:
         # Path denied / unsupported type — never leak internals.
         raise HTTPException(status_code=400, detail=str(e))
-    except ConnectionError as e:
+    except TimeoutError as e:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                f"Local vision model (Qwen2.5-VL) analysis timed out on "
+                f"{VISION_ENDPOINT}. The model may be overloaded or the image large. "
+                f"Try a simpler task or check the model server."
+            ),
+        )
+    except OSError as e:
         raise HTTPException(
             status_code=503,
             detail=(
                 f"Local vision model (Qwen2.5-VL) is not reachable on "
                 f"{VISION_ENDPOINT}. Start it with "
                 f"'python scripts/serve_model.py --model-id qwen-vision ... --port 8003'. "
-                f"Original error: {e}"
+                f"Transport error: {e}"
+            ),
+        )
+    except VisionUpstreamResponseError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"Local vision model (Qwen2.5-VL) returned an invalid response from "
+                f"{VISION_ENDPOINT}. The model may be corrupted or misbehaving."
             ),
         )
     except Exception as e:

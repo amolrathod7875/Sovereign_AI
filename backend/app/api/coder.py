@@ -14,12 +14,13 @@ import asyncio
 import logging
 import uuid
 from typing import Dict, Any, List
+from httpx import ConnectError
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.schemas import RoutingDecision
-from agent.coder.config import CODER_MODEL_TIMEOUT
+from agent.coder.config import CODER_MODEL_TIMEOUT, CODER_ENDPOINT
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -74,6 +75,28 @@ async def run_coder(req: CoderRunRequest):
                 f"Coder workflow exceeded {CODER_DEADLINE}s deadline. "
                 "The local model may be overloaded or the task too complex. "
                 "Try a simpler task or check the model server."
+            ),
+        )
+    except ConnectError as e:
+        logger.error("coder connection failed: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Local coder model (Qwen2.5-Coder) is not reachable on "
+                f"{CODER_ENDPOINT}. Start it with "
+                f"'python scripts/serve_model.py --model-id qwen-coder --port 8002'. "
+                f"Connection error: {e}"
+            ),
+        )
+    except OSError as e:
+        logger.error("coder transport failed: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Local coder model (Qwen2.5-Coder) is not reachable on "
+                f"{CODER_ENDPOINT}. Start it with "
+                f"'python scripts/serve_model.py --model-id qwen-coder --port 8002'. "
+                f"Transport error: {e}"
             ),
         )
     except Exception as e:  # surface failures clearly
