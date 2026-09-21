@@ -1,0 +1,15 @@
+{
+  "project_structure": {
+    "directories": [
+      "backend",
+      "frontend",
+      "infra",
+      "prerequistes",
+      "reports",
+      "scripts",
+      "security",
+      "uploads"
+    ]
+  },
+  "status": "Scanned successfully (Read-Only)"
+}
