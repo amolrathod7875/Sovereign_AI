@@ -46,5 +46,6 @@ def search_knowledge_base(
             "score": r.get("score", 0.0),
             "chunk_id": m.get("chunk_id", ""),
             "section": m.get("section", ""),
+            "retrieval_mode": r.get("retrieval_mode", "unknown"),
         })
     return out

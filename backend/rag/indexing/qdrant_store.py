@@ -40,6 +40,34 @@ class QdrantStore:
         else:
             logger.info(f"Qdrant collection exists: {self.collection}")
 
+    def collection_dim(self) -> int:
+        """Return the vector dimension of the existing collection, or None if absent."""
+        existing = {c.name: c for c in self._client.get_collections().collections}
+        if self.collection not in existing:
+            return None
+        info = self._client.get_collection(self.collection)
+        # Qdrant exposes the configured vector size via get_collection_config in
+        # newer clients; fall back to the collection info params.
+        params = getattr(info.config, "params", None)
+        vec_config = getattr(params, "vectors", None)
+        if vec_config is None:
+            vec_config = params.vectors_config if hasattr(params, "vectors_config") else None
+        if vec_config is not None:
+            if hasattr(vec_config, "size"):
+                return int(vec_config.size)
+            if hasattr(vec_config, "vec_size"):
+                return int(vec_config.vec_size)
+        # Last-resort: read from the top-level config dict
+        try:
+            cfg = self._client.get_collection(self.collection).model_dump()
+            v = cfg.get("config", {}).get("params", {}).get("vectors", {})
+            if isinstance(v, dict):
+                first = next(iter(v.values()))
+                return int(first.get("size"))
+        except Exception:
+            pass
+        return None
+
     def upsert(self, points: List[Dict[str, Any]]):
         """points: list of {id (string chunk_id), vector, text, metadata}.
 

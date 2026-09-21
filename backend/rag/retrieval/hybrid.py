@@ -2,13 +2,17 @@
 
 retrieve(query, asset_tag, document_type, top_k) -> list of
   {"text", "score", "metadata": {asset_tag, document_type, source_file, data_origin,
-                                  source_drawing, chunk_id}}
+                                 source_drawing, chunk_id}, "retrieval_mode": "hybrid"|"bm25_only"}
+
+When the local embedding model is unavailable the retriever falls back to
+BM25-only (degraded) mode and every result carries retrieval_mode="bm25_only"
+so callers can never mistake lexical-only hits for full hybrid retrieval.
 """
 import logging
 from typing import List, Dict, Any, Optional
 
 from rag import config
-from rag.models.embeddings import LocalEmbedder
+from rag.models.embeddings import LocalEmbedder, EmbeddingModelUnavailable
 from rag.indexing.qdrant_store import QdrantStore
 from rag.indexing.bm25_store import BM25Store
 
@@ -25,19 +29,64 @@ def _normalize(scores: List[float]) -> List[float]:
 
 
 class HybridRetriever:
+    """Hybrid retriever with honest BM25-only degradation.
+
+    On construction the embedder is created.  If the local embedding model is
+    absent, ``EmbeddingModelUnavailable`` is caught, ``self.embedder`` is set to
+    ``None``, and the retriever operates in BM25-only degraded mode.  Every
+    result from degraded mode is tagged ``retrieval_mode="bm25_only"``.
+    """
+
     def __init__(self):
-        self.embedder = LocalEmbedder(config.EMBEDDING_MODEL)
         self.qstore = QdrantStore()
         self.bm = BM25Store()
+        self.embedder: Optional[LocalEmbedder] = None
+        self._vector_available = False
+        self._dim_checked = False
+
+        try:
+            self.embedder = LocalEmbedder(config.EMBEDDING_MODEL)
+            self._vector_available = True
+        except EmbeddingModelUnavailable:
+            logger.warning(
+                "Local embedding model unavailable — operating in BM25-only "
+                "(degraded) mode. Vector retrieval is disabled."
+            )
+            self.embedder = None
+            self._vector_available = False
+
+    def _check_qdrant_dim(self) -> bool:
+        """Verify the embedder dimension matches the existing Qdrant collection."""
+        if self._dim_checked or not self._vector_available:
+            return True
+        self._dim_checked = True
+        stored = self.qstore.collection_dim()
+        if stored is not None and stored != self.embedder.dim:
+            raise EmbeddingModelUnavailable(
+                f"Qdrant collection vector dimension ({stored}) does not match "
+                f"the local embedding model dimension ({self.embedder.dim}). "
+                f"Re-indexing is required before hybrid retrieval."
+            )
+        return True
 
     def retrieve(self, query: str, asset_tag: str = None, document_type: str = None,
                  top_k: int = 8) -> List[Dict[str, Any]]:
+        lex = self.bm.search(query, top_k=top_k * 4, asset_tag=asset_tag,
+                             document_type=document_type)
+
+        if not self._vector_available:
+            # --- Degraded: BM25-only, labelled honestly ---
+            ordered = sorted(lex, key=lambda x: x["score"], reverse=True)[:top_k]
+            return [{"text": o["text"], "score": round(o["score"], 4),
+                     "metadata": o["metadata"], "retrieval_mode": "bm25_only"}
+                    for o in ordered]
+
+        # --- Full hybrid: semantic + lexical ---
+        self._check_qdrant_dim()
         qvec = self.embedder.embed([query])[0]
 
         sem = self.qstore.search(qvec, top_k=top_k * 4, asset_tag=asset_tag,
                                  document_type=document_type)
-        lex = self.bm.search(query, top_k=top_k * 4, asset_tag=asset_tag,
-                            document_type=document_type)
 
         fused: Dict[str, Dict[str, Any]] = {}
         for hit, n in zip(sem, _normalize([h["score"] for h in sem])):
@@ -55,7 +104,8 @@ class HybridRetriever:
                 cur["score"] += config.BM25_WEIGHT * n
 
         ordered = sorted(fused.values(), key=lambda x: x["score"], reverse=True)[:top_k]
-        return [{"text": o["text"], "score": round(o["score"], 4), "metadata": o["metadata"]}
+        return [{"text": o["text"], "score": round(o["score"], 4), "metadata": o["metadata"],
+                 "retrieval_mode": "hybrid"}
                 for o in ordered]
 
 
