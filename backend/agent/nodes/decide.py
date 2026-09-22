@@ -15,6 +15,9 @@ def run(state: dict) -> dict:
     calc = state.get("calculations", {})
     sensor = calc.get("sensor_analysis", {})
 
+    asset_tag = (state.get("asset_identity", {}).get("canonical_tag")
+                 or state.get("asset_tag", "R-1001"))
+
     shutdown_needed = any("shutdown" in a.lower() or "esd" in a.lower() for a in actions)
     approval_required = bool(shutdown_needed and actions)
 
@@ -38,7 +41,7 @@ def run(state: dict) -> dict:
         )
 
     reasoning = (
-        "R-1001 process data shows confirmed threshold breaches "
+        f"{asset_tag} process data shows confirmed threshold breaches "
         f"({'multiple signals' if sensor.get('breached_signals') else 'no signal'}). "
         "These breaches are correlated with the latest inspection findings "
         "(catalyst hotspot, thermowell drift, gasket weep). The applicable Operating/PM SOP "
@@ -49,7 +52,7 @@ def run(state: dict) -> dict:
 
     decision = {
         "decision": (
-            "Initiate a controlled reactor shutdown and perform corrective maintenance on R-1001 "
+            f"Initiate a controlled reactor shutdown and perform corrective maintenance on {asset_tag} "
             "(catalyst replacement, top-head gasket replacement, thermowell recalibration) per the "
             "Operating/PM SOP; stage vendor-recommended spares and obtain maintenance approval "
             "before execution."

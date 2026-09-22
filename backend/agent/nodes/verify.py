@@ -24,7 +24,9 @@ def run(state: dict) -> dict:
         verification = {"ok": False, "error": "no artifact produced", "missing_sections": ["artifact"]}
         errors.append("verify:no_artifact")
     else:
-        verification = verify_docx(path)
+        expected = (state.get("asset_identity", {}).get("canonical_tag")
+                    or state.get("asset_tag"))
+        verification = verify_docx(path, expected_asset_tag=expected)
         if not verification.get("ok"):
             errors.append("verify:missing_sections:" + ",".join(verification.get("missing_sections", [])))
 

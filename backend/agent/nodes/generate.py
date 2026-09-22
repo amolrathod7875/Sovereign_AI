@@ -10,9 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 def _source_references(state: dict) -> List[str]:
+    asset_tag = state.get("asset_identity", {}).get("canonical_tag") or state.get("asset_tag", "R-1001")
     refs = set()
     for d in state.get("retrieved_documents", []):
-        refs.add(f"assets/R-1001/.../{d.get('source_file')} ({d.get('document_type')})")
+        refs.add(f"assets/{asset_tag}/.../{d.get('source_file')} ({d.get('document_type')})")
     for c in state.get("retrieved_chunks", []):
         if c.get("source_file"):
             refs.add(f"knowledge_base: {c.get('source_file')} ({c.get('document_type')})")
@@ -27,7 +28,7 @@ def _build_content(state: dict) -> Dict[str, Any]:
     sensor = calc.get("sensor_analysis", {}) or {}
     py = calc.get("python_analysis", {}) or {}
     decision = state.get("decision", {}) or {}
-    asset_tag = state.get("asset_tag", "R-1001")
+    asset_tag = state.get("asset_identity", {}).get("canonical_tag") or state.get("asset_tag", "R-1001")
     signals = sensor.get("signals", {}) or {}
 
     # --- Sensor evidence: structured rows for the table + keyword-bearing text ---
@@ -154,7 +155,7 @@ def _build_content(state: dict) -> Dict[str, Any]:
     n_breached = len([s for s in signals.values()
                       if isinstance(s, dict) and s.get("n_breach_high")])
     executive_summary = (
-        f"R-1001 process data shows confirmed threshold breaches across "
+        f"{asset_tag} process data shows confirmed threshold breaches across "
         f"{n_breached} sensor signal(s) (reactor temperature, pressure, vibration), "
         f"correlated with inspection defects (catalyst hotspot, thermowell drift, "
         f"gasket weep). Recommended decision: {decision.get('decision', '')}. "
@@ -162,16 +163,16 @@ def _build_content(state: dict) -> Dict[str, Any]:
     )
 
     approval_request = (
-        "Approval is requested for a controlled R-1001 shutdown and corrective maintenance "
-        "(catalyst + gasket replacement and thermowell recalibration) with the vendor-recommended "
-        "spare parts. Work must not commence until maintenance approval is granted."
+        f"Approval is requested for a controlled {asset_tag} shutdown and corrective maintenance "
+        f"(catalyst + gasket replacement and thermowell recalibration) with the vendor-recommended "
+        f"spare parts. Work must not commence until maintenance approval is granted."
         if decision.get("approval_required")
         else "No shutdown approval is required for the identified conditions."
     )
 
     asset_information = {
         "Asset Tag": asset_tag,
-        "Equipment": "R-1001 Catalytic Reactor (continuous process unit)",
+        "Equipment": f"{asset_tag} Catalytic Reactor (continuous process unit)",
         "Reference Documents": "equipment_manual, operating_sop, "
                                 "preventive_maintenance_sop, inspection_report, vendor_correspondence",
         "Sensor Dataset": f"{sensor.get('n_rows')} readings across {len(signals)} signals (local CSV)",

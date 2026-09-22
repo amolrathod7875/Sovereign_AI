@@ -1,0 +1,141 @@
+{
+  "timestamp": "2026-09-22T15:32:44.479604Z",
+  "run_id": "run_07d24d69e01e",
+  "status": "VERIFIED",
+  "asset_identity": {
+    "status": "VERIFIED",
+    "requested_tag": "R-1001",
+    "canonical_tag": "R-1001",
+    "vision_tags": [
+      "R-1001",
+      "V-1001",
+      "P-1001",
+      "ID-1001"
+    ],
+    "matched_vision_tag": "R-1001",
+    "related_vision_tags": [
+      "V-1001",
+      "P-1001",
+      "ID-1001"
+    ],
+    "reason": "Requested asset 'R-1001' verified: present in vision tags (R-1001) and in the canonical registry.",
+    "source": "local_asset_registry"
+  },
+  "retrieval_summary": {
+    "chunk_count": 36,
+    "unique_asset_tags": [
+      "R-1001"
+    ],
+    "source_files": [
+      "inspection_report.pdf",
+      "manual.docx",
+      "operating_sop.docx",
+      "pm_sop.docx",
+      "profile.json",
+      "sensor_dataset.csv",
+      "vendor_correspondence.eml"
+    ],
+    "document_types": [
+      "canonical_profile",
+      "equipment_manual",
+      "inspection_report",
+      "operating_sop",
+      "preventive_maintenance_sop",
+      "sensor_dataset",
+      "vendor_correspondence"
+    ],
+    "retrieval_modes": [
+      "hybrid"
+    ]
+  },
+  "calculations_summary": {
+    "any_threshold_breach": true,
+    "breached_signals": [
+      "TI-1001_reactor_temp_C",
+      "PI-1001_reactor_pressure_bar",
+      "VI-1001_reactor_vibration_mm_s"
+    ],
+    "signals": {
+      "TI-1001_reactor_temp_C": {
+        "max": 322.4,
+        "mean": 288.146,
+        "n_breach_high": 239,
+        "first_breach_high": "2026-08-18T00:16:00",
+        "last_breach_high": "2026-08-29T07:16:00"
+      },
+      "PI-1001_reactor_pressure_bar": {
+        "max": 22.428,
+        "mean": 18.817,
+        "n_breach_high": 243,
+        "first_breach_high": "2026-08-16T17:16:00",
+        "last_breach_high": "2026-08-29T07:16:00"
+      },
+      "VI-1001_reactor_vibration_mm_s": {
+        "max": 5.287,
+        "mean": 2.668,
+        "n_breach_high": 288,
+        "first_breach_high": "2026-08-14T17:16:00",
+        "last_breach_high": "2026-08-29T07:16:00"
+      },
+      "LI-1001_reactor_level_pct": {
+        "max": 64.9,
+        "mean": 59.99,
+        "n_breach_high": 0,
+        "first_breach_high": null,
+        "last_breach_high": null
+      }
+    },
+    "inspection_findings": [
+      "catalyst_hotspot",
+      "thermowell_drift",
+      "gasket_weep"
+    ],
+    "vendor_parts": [
+      "HRS-CAT-22",
+      "HRS-GSK-1001",
+      "HRS-TW-1001"
+    ],
+    "sop_requirements": [
+      "controlled shutdown",
+      "emergency shutdown (ESD)",
+      "reactor trip",
+      "catalyst change-out",
+      "maintenance approval gate"
+    ],
+    "sandbox_used": true
+  },
+  "decision": "Initiate a controlled reactor shutdown and perform corrective maintenance on R-1001 (catalyst replacement, top-head gasket replacement, thermowell recalibration) per the Operating/PM SOP; stage vendor-recommended spares and obtain maintenance approval before execution.",
+  "approval_required": true,
+  "artifacts": [
+    "data\\outputs\\R-1001_FLAGSHIP_DRAFT_APPROVAL.docx"
+  ],
+  "verification": {
+    "ok": true,
+    "missing_sections": [],
+    "asset_present": true,
+    "disclaimer_present": true,
+    "sources_present": true,
+    "paragraphs": 86
+  },
+  "external_calls": 0,
+  "flagship_validation": {
+    "passed": true,
+    "failed": [],
+    "checks": {
+      "asset_identity_verified": true,
+      "canonical_asset_correct": true,
+      "only_canonical_asset_retrieved": true,
+      "hybrid_rag_used": true,
+      "sensor_breach_present": true,
+      "inspection_evidence_present": true,
+      "vendor_evidence_present": true,
+      "sop_evidence_present": true,
+      "sandbox_executed": true,
+      "approval_required": true,
+      "artifact_created": true,
+      "artifact_verified": true,
+      "external_calls_zero": true,
+      "trace_complete": true
+    }
+  }
+}

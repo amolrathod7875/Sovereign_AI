@@ -93,9 +93,9 @@ def test_second_process_blocks_while_first_holds(tmp_path):
     )
 
     holder.start()
+    assert ready_queue.get(timeout=5.0) is True
     waiter.start()
 
-    assert ready_queue.get(timeout=5.0) is True
     outcome = result_queue.get(timeout=5.0)
 
     holder.join(timeout=5.0)
@@ -122,9 +122,9 @@ def test_second_process_acquires_after_release(tmp_path):
     )
 
     holder.start()
+    assert ready_queue.get(timeout=5.0) is True
     waiter.start()
 
-    assert ready_queue.get(timeout=5.0) is True
     holder.join(timeout=5.0)
     assert not holder.is_alive()
 
@@ -166,10 +166,9 @@ def test_admission_timeout_is_bounded(tmp_path):
     )
 
     holder.start()
-    waiter.start()
-
     assert ready_queue.get(timeout=5.0) is True
     start = time.monotonic()
+    waiter.start()
     outcome = result_queue.get(timeout=5.0)
     elapsed = time.monotonic() - start
 

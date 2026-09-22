@@ -27,7 +27,10 @@ import uvicorn
 from llama_cpp import Llama
 from llama_cpp.llama_chat_format import Qwen25VLChatHandler
 
-from scripts.gpu_admission import GPUAdmissionLease, GPUAdmissionTimeout, acquire
+try:
+    from scripts.gpu_admission import GPUAdmissionLease, GPUAdmissionTimeout, acquire
+except ImportError:
+    from gpu_admission import GPUAdmissionLease, GPUAdmissionTimeout, acquire
 
 logger = logging.getLogger(__name__)
 

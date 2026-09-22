@@ -34,10 +34,11 @@ def run(state: dict) -> dict:
                 f"(first {s.get('first_breach_high')}, last {s.get('last_breach_high')}); "
                 f"HH breaches: {s.get('n_breach_high_high', 0)}."
             )
+    asset_tag = state.get("asset_identity", {}).get("canonical_tag") or state.get("asset_tag", "R-1001")
     if breach_lines:
         findings.append({
             "claim": "sensor_anomaly",
-            "value": "Threshold breaches detected in R-1001 process data: " + " ".join(breach_lines),
+            "value": f"Threshold breaches detected in {asset_tag} process data: " + " ".join(breach_lines),
             "source_document_type": "sensor_dataset",
         })
 

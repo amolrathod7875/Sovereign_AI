@@ -32,7 +32,7 @@ REQUIRED_SECTIONS = [
 
 DISCLAIMER = (
     "DISCLAIMER: This document was generated autonomously by the Sovereign AI "
-    "maintenance agent from SYNTHETIC demonstration data (R-1001 demo dataset). "
+    "maintenance agent from SYNTHETIC demonstration data. "
     "It is for demonstration and evaluation only and must not be used for real "
     "plant operations, safety decisions, or regulatory submissions."
 )
@@ -215,8 +215,12 @@ def create_approval_note(content: Dict[str, Any], output_path: Optional[str] = N
     return out_path
 
 
-def verify_docx(path: str) -> Dict[str, Any]:
-    """Re-open a DOCX and verify all required sections/content are present."""
+def verify_docx(path: str, expected_asset_tag: Optional[str] = None) -> Dict[str, Any]:
+    """Re-open a DOCX and verify all required sections/content are present.
+
+    If ``expected_asset_tag`` is provided, the document must contain that exact
+    canonical asset tag.
+    """
     missing_sections = []
     asset_present = False
     disclaimer_present = False
@@ -249,10 +253,13 @@ def verify_docx(path: str) -> Dict[str, Any]:
         if marker and marker not in lowered:
             missing_sections.append(label)
 
-    if "R-1001" in full_text:
+    if expected_asset_tag:
+        if expected_asset_tag in full_text:
+            asset_present = True
+        else:
+            missing_sections.append(f"Asset Tag ({expected_asset_tag})")
+    elif "R-1001" in full_text:
         asset_present = True
-    else:
-        missing_sections.append("Asset Tag (R-1001)")
 
     if "disclaimer" in lowered and "synthetic" in lowered:
         disclaimer_present = True

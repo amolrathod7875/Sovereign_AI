@@ -53,7 +53,9 @@ def run_agent_task(task: str, asset_tag: str = "R-1001", run_id: str = None,
     decision = final.get("decision", {})
     evidence = [
         {"claim": e.get("claim"), "source": e.get("source_file"),
-         "document_type": e.get("document_type"), "confidence": e.get("confidence")}
+         "document_type": e.get("document_type"), "confidence": e.get("confidence"),
+         "asset_tag": e.get("asset_tag"), "chunk_id": e.get("chunk_id"),
+         "section": e.get("section"), "retrieval_mode": e.get("retrieval_mode")}
         for e in final.get("evidence", [])
     ]
 
@@ -78,12 +80,18 @@ def run_agent_task(task: str, asset_tag: str = "R-1001", run_id: str = None,
         "errors": final.get("errors", []),
         "verification": final.get("verification", {}),
         "routing": routing,
+        "asset_identity": final.get("asset_identity", {}),
+        "retrieval_summary": _retrieval_summary(final),
         "output_dir": str(OUTPUT_DIR),
     }
 
 
 def _calc_summary(calc: Dict[str, Any]) -> Dict[str, Any]:
-    sensor = calc.get("sensor_analysis", {})
+    sensor = calc.get("sensor_analysis", {}) or {}
+    py = calc.get("python_analysis", {}) or {}
+    py_ok = bool(py and not py.get("error") and (
+        py.get("result") or py.get("breach_summary") or py.get("raw")
+    ))
     out = {
         "any_threshold_breach": sensor.get("any_threshold_breach"),
         "breached_signals": sensor.get("breached_signals"),
@@ -98,6 +106,22 @@ def _calc_summary(calc: Dict[str, Any]) -> Dict[str, Any]:
         "inspection_findings": [f.get("type") for f in calc.get("inspection_findings", [])],
         "vendor_parts": [p.get("part_number") for p in calc.get("vendor_parts", [])],
         "sop_requirements": calc.get("sop_requirements", []),
-        "python_analysis": calc.get("python_analysis"),
+        "python_analysis": py,
+        "sandbox_used": py_ok,
     }
     return out
+
+
+def _retrieval_summary(final: Dict[str, Any]) -> Dict[str, Any]:
+    chunks = final.get("retrieved_chunks", []) or []
+    asset_tags = sorted({c.get("asset_tag", "") for c in chunks if c.get("asset_tag")})
+    source_files = sorted({c.get("source_file", "") for c in chunks if c.get("source_file")})
+    doc_types = sorted({c.get("document_type", "") for c in chunks if c.get("document_type")})
+    modes = sorted({c.get("retrieval_mode", "unknown") for c in chunks if c.get("retrieval_mode")})
+    return {
+        "chunk_count": len(chunks),
+        "unique_asset_tags": asset_tags,
+        "source_files": source_files,
+        "document_types": doc_types,
+        "retrieval_modes": modes,
+    }
