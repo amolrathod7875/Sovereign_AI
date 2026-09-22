@@ -64,6 +64,9 @@ class AgentState(TypedDict):
     verification: Dict[str, Any]
     external_calls: int               # MUST remain 0 (network sovereignty)
 
+    # --- asset identity gate ---
+    asset_identity: Dict[str, Any]    # identity validation result from asset_identity node
+
 
 def create_initial_state(run_id: str, user_request: str, asset_tag: str = "R-1001") -> AgentState:
     return AgentState(
@@ -93,4 +96,5 @@ def create_initial_state(run_id: str, user_request: str, asset_tag: str = "R-100
         status="PENDING",
         verification={},
         external_calls=0,
+        asset_identity={},
     )

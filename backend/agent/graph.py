@@ -14,7 +14,7 @@ from langgraph.graph import StateGraph, START, END
 
 from agent.state import AgentState
 from agent.nodes import (
-    plan, retrieve, analyze, needs_calculation, python_analysis,
+    plan, identity, retrieve, analyze, needs_calculation, python_analysis,
     synthesize, decide, generate, verify, verify_route, vision,
 )
 
@@ -24,6 +24,7 @@ def build_graph():
 
     g.add_node("planner", plan)
     g.add_node("vision_analysis", vision)
+    g.add_node("validate_identity", identity)
     g.add_node("retrieve_evidence", retrieve)
     g.add_node("analyze_evidence", analyze)
     g.add_node("calc_gate", needs_calculation)
@@ -36,14 +37,21 @@ def build_graph():
     g.add_edge(START, "planner")
 
     # Multimodal branch: if a vision input is attached, analyze it with the local
-    # VLM BEFORE retrieving knowledge, so vision-extracted equipment tags can drive
-    # a vision-grounded RAG search. Otherwise go straight to retrieval.
+    # VLM, run asset-identity validation, then retrieve. Otherwise go straight to
+    # asset-identity validation and then retrieval.
     g.add_conditional_edges(
         "planner",
-        lambda s: "vision" if s.get("image_path") else "retrieve",
-        {"vision": "vision_analysis", "retrieve": "retrieve_evidence"},
+        lambda s: "vision" if s.get("image_path") else "identity",
+        {"vision": "vision_analysis", "identity": "validate_identity"},
     )
-    g.add_edge("vision_analysis", "retrieve_evidence")
+    g.add_edge("vision_analysis", "validate_identity")
+
+    # Identity gate: only proceed to retrieval when identity is verified.
+    g.add_conditional_edges(
+        "validate_identity",
+        lambda s: "retrieve" if s.get("status") == "IDENTITY_VERIFIED" else "blocked",
+        {"retrieve": "retrieve_evidence", "blocked": END},
+    )
 
     g.add_edge("retrieve_evidence", "analyze_evidence")
     g.add_edge("analyze_evidence", "calc_gate")

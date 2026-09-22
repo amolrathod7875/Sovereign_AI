@@ -7,6 +7,7 @@ from typing import Dict, Any, List
 from agent.tools.search_kb import search_knowledge_base
 from agent.tools.read_document import read_document
 from agent.config import ASSETS_DIR
+from agent.identity import resolve_asset_identity, AssetIdentityStatus, load_asset_registry
 from agent.utils import trace_entry, elapsed_ms
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,48 @@ def _build_evidence(plan_item: Dict[str, Any], hits: List[Dict[str, Any]]) -> Li
 
 def run(state: dict) -> dict:
     start = time.time()
-    asset_tag = state["asset_tag"]
+
+    # ------------------------------------------------------------------
+    # Fail-closed identity gate.
+    #
+    # If asset_identity is missing, malformed, has an unrecognized status,
+    # or carries a canonical_tag that is not present in the trusted local
+    # registry, re-resolve deterministically via the authoritative identity
+    # module.  Never trust caller-supplied identity dicts blindly.
+    # ------------------------------------------------------------------
+    identity = state.get("asset_identity") or {}
+    identity_status = identity.get("status", "")
+    canonical_tag = identity.get("canonical_tag") or state.get("asset_tag", "")
+
+    registry = load_asset_registry()
+
+    if (not identity
+            or identity_status not in ("VERIFIED", "VERIFIED_TEXT_ONLY")
+            or not canonical_tag
+            or canonical_tag not in registry):
+        requested = state.get("asset_tag", "")
+        vision_tags = state.get("vision_tags") or []
+        result = resolve_asset_identity(
+            requested_tag=requested,
+            vision_tags=vision_tags if vision_tags else None,
+            registry=registry,
+        )
+        if result.status not in (AssetIdentityStatus.VERIFIED, AssetIdentityStatus.VERIFIED_TEXT_ONLY):
+            return {
+                "retrieved_chunks": [],
+                "retrieved_documents": [],
+                "evidence": [],
+                "errors": [f"retrieve:blocked:identity_status={result.status.value}"],
+                "status": "RETRIEVAL_BLOCKED",
+                "trace": [trace_entry("retrieve_evidence", "blocked_identity", "agent.identity",
+                                      elapsed_ms(start), "BLOCKED",
+                                      identity_status=result.status.value,
+                                      reason=result.reason)],
+            }
+        canonical_tag = result.canonical_tag
+        identity_status = result.status.value
+
+    asset_tag = canonical_tag
     plan = state["plan"]
 
     chunks: List[Dict[str, Any]] = []
@@ -53,6 +95,12 @@ def run(state: dict) -> dict:
         try:
             hits = search_knowledge_base(q, asset_tag=asset_tag, document_type=dt, top_k=6)
             for h in hits:
+                if h.get("asset_tag") != asset_tag:
+                    logger.warning(
+                        "retrieve: dropped foreign-asset hit asset_tag=%s expected=%s",
+                        h.get("asset_tag"), asset_tag,
+                    )
+                    continue
                 chunks.append(h)
             evidence.extend(_build_evidence(item, hits))
         except Exception as e:
@@ -79,25 +127,32 @@ def run(state: dict) -> dict:
                 logger.error("read failed for %s: %s", path, e)
                 errors.append(f"read:{dt}:{e}")
 
-    # Vision-grounded RAG: use equipment tags the VLM extracted from the drawing
-    # to pull the matching local knowledge-base documents (vision -> RAG).
+    # Vision-grounded RAG: only retrieve for the canonical validated asset, using
+    # the vision tags as additional query context. Raw/related vision tags must NOT
+    # independently drive asset-scoped RAG for a different asset.
     vision_tags = state.get("vision_tags") or []
     if vision_tags:
-        for tag in vision_tags[:5]:
-            try:
-                hits = search_knowledge_base(
-                    f"{tag} equipment specification operating parameters",
-                    asset_tag=asset_tag, top_k=4,
-                )
-                for h in hits:
-                    chunks.append(h)
-                evidence.extend(_build_evidence(
-                    {"category": "vision_rag", "document_type": ""},
-                    hits,
-                ))
-            except Exception as e:
-                logger.error("vision-grounded retrieval failed for %s: %s", tag, e)
-                errors.append(f"retrieve:vision_rag:{tag}:{e}")
+        try:
+            vision_query = " ".join(vision_tags[:5])
+            hits = search_knowledge_base(
+                f"{vision_query} equipment specification operating parameters",
+                asset_tag=asset_tag, top_k=4,
+            )
+            for h in hits:
+                if h.get("asset_tag") != asset_tag:
+                    logger.warning(
+                        "retrieve: dropped foreign-asset vision hit asset_tag=%s expected=%s",
+                        h.get("asset_tag"), asset_tag,
+                    )
+                    continue
+                chunks.append(h)
+            evidence.extend(_build_evidence(
+                {"category": "vision_rag", "document_type": ""},
+                hits,
+            ))
+        except Exception as e:
+            logger.error("vision-grounded retrieval failed: %s", e)
+            errors.append(f"retrieve:vision_rag:{e}")
 
     return {
         "retrieved_chunks": chunks,
@@ -109,5 +164,6 @@ def run(state: dict) -> dict:
                               "search_knowledge_base,read_document",
                               elapsed_ms(start), "SUCCESS",
                               chunks=len(chunks), docs=len(docs), evidence=len(evidence),
-                              vision_tags=len(vision_tags))],
+                              vision_tags=len(vision_tags),
+                              canonical_asset=asset_tag)],
     }
