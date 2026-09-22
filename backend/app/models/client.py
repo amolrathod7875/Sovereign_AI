@@ -14,6 +14,11 @@ class ModelClientError(Exception):
     pass
 
 
+class ModelBusyError(Exception):
+    """Raised when the local GPU inference capacity is busy (HTTP 429)."""
+    pass
+
+
 class ModelClient:
     def __init__(self, model_id: str, endpoint: str):
         self.model_id = model_id
@@ -40,6 +45,11 @@ class ModelClient:
                 },
                 timeout=timeout,
             )
+            if response.status_code == 429:
+                raise ModelBusyError(
+                    f"Local GPU inference capacity is busy (model={self.model_id}). "
+                    "Retry later."
+                )
             response.raise_for_status()
             result = response.json()
 

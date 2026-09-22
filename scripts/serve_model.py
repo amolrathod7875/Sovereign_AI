@@ -15,6 +15,9 @@ Example:
       --port 8003
 """
 import argparse
+import asyncio
+import logging
+import os
 import time
 import uuid
 
@@ -24,13 +27,36 @@ import uvicorn
 from llama_cpp import Llama
 from llama_cpp.llama_chat_format import Qwen25VLChatHandler
 
+from scripts.gpu_admission import GPUAdmissionLease, GPUAdmissionTimeout, acquire
 
-def build_app(model_id: str, llm: Llama) -> FastAPI:
+logger = logging.getLogger(__name__)
+
+
+def build_app(model_id: str, llm: Llama, admission_timeout: float) -> FastAPI:
     app = FastAPI(title=f"Sovereign AI - {model_id}")
 
     @app.get("/v1/models")
     def list_models():
         return {"object": "list", "data": [{"id": model_id, "object": "model"}]}
+
+    def _run_inference(messages: list, temperature: float, max_tokens: int, stream: bool):
+        with acquire(timeout_s=admission_timeout) as lease:
+            logger.info(
+                "GPU admission granted model=%s pid=%d wait_ms=%.0f",
+                model_id,
+                os.getpid(),
+                lease.wait_ms,
+            )
+            try:
+                return llm.create_chat_completion(
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=stream,
+                )
+            except Exception:
+                logger.exception("Inference failed model=%s pid=%d", model_id, os.getpid())
+                raise
 
     @app.post("/v1/chat/completions")
     async def chat_completions(req: Request):
@@ -41,15 +67,34 @@ def build_app(model_id: str, llm: Llama) -> FastAPI:
         stream = bool(body.get("stream", False))
 
         if stream:
-            # Simple non-streaming fallback (clients can call with stream=False).
             stream = False
 
-        out = llm.create_chat_completion(
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=stream,
-        )
+        try:
+            out = await asyncio.to_thread(
+                _run_inference,
+                messages,
+                temperature,
+                max_tokens,
+                stream,
+            )
+        except GPUAdmissionTimeout:
+            logger.warning(
+                "GPU admission timeout model=%s pid=%d timeout_s=%.1f",
+                model_id,
+                os.getpid(),
+                admission_timeout,
+            )
+            return JSONResponse(
+                status_code=429,
+                headers={"Retry-After": "5"},
+                content={
+                    "error": {
+                        "type": "gpu_busy",
+                        "message": "Local GPU inference capacity is busy. Retry later.",
+                    }
+                },
+            )
+
         content = out["choices"][0]["message"]["content"]
         prompt_tokens = out.get("usage", {}).get("prompt_tokens", 0)
         completion_tokens = out.get("usage", {}).get("completion_tokens", 0)
@@ -84,15 +129,19 @@ def main():
     p.add_argument("--model-path", required=True)
     p.add_argument("--mmproj", default=None)
     p.add_argument("--chat-format", default=None)
-    # Production defaults (validated Phases 11.4-11.8 on RTX 4050):
-    #   coder:  --n-gpu-layers 40 --n-ctx 2048
-    #   vision: --n-gpu-layers 99 --n-ctx 2048
-    # See backend/app.config Settings class for the canonical values.
     p.add_argument("--n-ctx", type=int, default=4096)
     p.add_argument("--n-gpu-layers", type=int, default=0)
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, required=True)
+    p.add_argument(
+        "--gpu-admission-timeout",
+        type=float,
+        default=float(os.environ.get("SOVEREIGN_GPU_ADMISSION_TIMEOUT", "60")),
+        help="Max seconds to wait for global GPU admission before returning HTTP 429.",
+    )
     args = p.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
     chat_handler = None
     if args.mmproj:
@@ -107,7 +156,7 @@ def main():
         verbose=False,
     )
 
-    app = build_app(args.model_id, llm)
+    app = build_app(args.model_id, llm, args.gpu_admission_timeout)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 

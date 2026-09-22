@@ -65,6 +65,11 @@ class VisionUpstreamResponseError(Exception):
     pass
 
 
+class VisionModelBusyError(Exception):
+    """Raised when the local GPU inference capacity is busy (HTTP 429)."""
+    pass
+
+
 def validate_path(file_path: str) -> Path:
     """Resolve and authorize a vision input path. Raises on missing/denied."""
     if not file_path:
@@ -230,14 +235,20 @@ def _call_vlm(content: List[Dict[str, Any]], max_tokens: int = 600) -> str:
     """
     _assert_local_endpoint(VISION_ENDPOINT)
     from openai import OpenAI
+    from openai import RateLimitError
 
-    client = OpenAI(base_url=VISION_ENDPOINT, api_key="none", timeout=VISION_TIMEOUT)
-    resp = client.chat.completions.create(
-        model=VISION_MODEL_NAME,
-        messages=[{"role": "user", "content": content}],
-        max_tokens=max_tokens,
-        temperature=0.1,
-    )
+    client = OpenAI(base_url=VISION_ENDPOINT, api_key="none", timeout=VISION_TIMEOUT, max_retries=0)
+    try:
+        resp = client.chat.completions.create(
+            model=VISION_MODEL_NAME,
+            messages=[{"role": "user", "content": content}],
+            max_tokens=max_tokens,
+            temperature=0.1,
+        )
+    except RateLimitError as e:
+        raise VisionModelBusyError(
+            "Local GPU inference capacity is busy. Retry later."
+        ) from e
     return resp.choices[0].message.content or ""
 
 

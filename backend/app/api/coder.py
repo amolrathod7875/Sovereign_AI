@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 from app.schemas import RoutingDecision
 from agent.coder.config import CODER_MODEL_TIMEOUT, CODER_ENDPOINT
+from app.models.client import ModelBusyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -87,6 +88,15 @@ async def run_coder(req: CoderRunRequest):
                 f"'python scripts/serve_model.py --model-id qwen-coder --port 8002'. "
                 f"Connection error: {e}"
             ),
+        )
+    except ModelBusyError as e:
+        logger.error("coder model busy: %s", e)
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Local GPU inference capacity is busy. Try again shortly."
+            ),
+            headers={"Retry-After": "5"},
         )
     except OSError as e:
         logger.error("coder transport failed: %s", e)

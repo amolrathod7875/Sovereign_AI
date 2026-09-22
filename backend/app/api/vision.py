@@ -40,7 +40,7 @@ def _analyze_guarded(file_path: str, prompt: Optional[str], analysis_type: str) 
 
 @router.post("/analyze", response_model=VisionAnalyzeResponse)
 async def analyze(req: VisionAnalyzeRequest):
-    from agent.tools.vision import VISION_MODEL_NAME, VisionUpstreamResponseError
+    from agent.tools.vision import VISION_MODEL_NAME, VisionUpstreamResponseError, VisionModelBusyError
     from agent.config import VISION_ENDPOINT
 
     t0 = time.time()
@@ -71,6 +71,14 @@ async def analyze(req: VisionAnalyzeRequest):
                 f"'python scripts/serve_model.py --model-id qwen-vision ... --port 8003'. "
                 f"Transport error: {e}"
             ),
+        )
+    except VisionModelBusyError as e:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Local GPU inference capacity is busy. Try again shortly."
+            ),
+            headers={"Retry-After": "5"},
         )
     except VisionUpstreamResponseError as e:
         raise HTTPException(
