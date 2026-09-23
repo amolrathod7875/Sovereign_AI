@@ -10,12 +10,14 @@ import {
   Network,
   Settings,
   Shield,
+  ShieldCheck,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useSystemStore, summarizeModels } from '../../lib/store'
 
 const navItems = [
   { path: '/workbench', label: 'AI Workbench', icon: MessageSquare },
+  { path: '/judge', label: 'Judge Mode', icon: ShieldCheck },
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/knowledge-base', label: 'Knowledge Base', icon: Database },
   { path: '/executions', label: 'Executions', icon: ListChecks },

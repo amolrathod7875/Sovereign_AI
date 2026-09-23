@@ -28,6 +28,10 @@ import type {
   ArtifactInfo,
   NetworkEvent,
   RunSummary,
+  JudgeOverview,
+  JudgeRunDetail,
+  JudgeFlagshipEvidence,
+  JudgeEvaluationEvidence,
 } from './types'
 
 const BASE_URL =
@@ -269,6 +273,29 @@ export function createNetworkMonitorStream(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Judge Mode (read-only)
+// ---------------------------------------------------------------------------
+export async function getJudgeOverview(): Promise<JudgeOverview> {
+  const { data } = await api.get<JudgeOverview>('/judge/overview')
+  return data
+}
+
+export async function getJudgeRun(runId: string): Promise<JudgeRunDetail> {
+  const { data } = await api.get<JudgeRunDetail>(`/judge/runs/${encodeURIComponent(runId)}`)
+  return data
+}
+
+export async function getJudgeFlagship(): Promise<JudgeFlagshipEvidence> {
+  const { data } = await api.get<JudgeFlagshipEvidence>('/judge/flagship')
+  return data
+}
+
+export async function getJudgeEvaluation(): Promise<JudgeEvaluationEvidence> {
+  const { data } = await api.get<JudgeEvaluationEvidence>('/judge/evaluation')
+  return data
+}
+
 export const apiClient = {
   getHealth,
   getSystemStatus,
@@ -288,6 +315,10 @@ export const apiClient = {
   artifactDownloadUrl,
   getNetworkEvents,
   createNetworkMonitorStream,
+  getJudgeOverview,
+  getJudgeRun,
+  getJudgeFlagship,
+  getJudgeEvaluation,
 }
 
 export default apiClient

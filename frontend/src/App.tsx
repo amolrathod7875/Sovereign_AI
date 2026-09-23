@@ -8,6 +8,7 @@ import ModelRegistry from './pages/ModelRegistry'
 import Artifacts from './pages/Artifacts'
 import NetworkMonitor from './pages/NetworkMonitor'
 import System from './pages/System'
+import JudgeMode from './pages/JudgeMode'
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
           <Route path="artifacts" element={<Artifacts />} />
           <Route path="network" element={<NetworkMonitor />} />
           <Route path="system" element={<System />} />
+        <Route path="judge" element={<JudgeMode />} />
         </Route>
       </Routes>
     </BrowserRouter>

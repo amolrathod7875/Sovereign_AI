@@ -308,3 +308,222 @@ export interface RunSummary {
   selected_model: string | null
   task_type: string | null
 }
+
+// ---------------------------------------------------------------------------
+// Judge Mode — Phase 16A backend/judge/service.py + backend/app/api/judge.py
+// ---------------------------------------------------------------------------
+
+export type JudgeSourceType =
+  | 'LIVE'
+  | 'LIVE_PERSISTENT'
+  | 'COMMITTED_HISTORICAL_EVIDENCE'
+  | 'FROZEN_EVALUATION_SNAPSHOT'
+  | 'UNAVAILABLE'
+
+export interface JudgeRuntime {
+  source_type: JudgeSourceType
+  sovereign_mode: boolean | null
+  gpu: {
+    name: string | null
+    memory_used_gb: number | null
+    memory_total_gb: number | null
+  } | null
+  components: Array<{
+    id: string
+    name: string
+    status: string
+    detail: string
+    endpoint: string | null
+    local: boolean
+  }>
+  external_api_calls: number
+  blocked_connections: number
+  uptime_seconds: number
+}
+
+export interface JudgeChainSummary {
+  entry_count: number
+  head_sequence: number | null
+  head_run_id: string | null
+  head_chain_sha256: string | null
+  valid: boolean
+  status: string
+  checks: Record<string, boolean>
+  violations: string[]
+}
+
+export interface JudgeGovernance {
+  source_type: 'LIVE_PERSISTENT'
+  pending_review_count: number
+  pending_reviews: Array<{
+    run_id: string
+    asset_tag: string
+    decision: string
+    status: string
+    created_at: string
+    artifact_sha256: string
+    identity_status: string
+    external_calls: number
+  }>
+  chain: JudgeChainSummary
+}
+
+export interface JudgeClaimBoundaries {
+  reviewer_identity_authenticated: boolean
+  whole_machine_airgap_certified: boolean
+  receipt_chain_tamper_proof: boolean
+  external_trust_anchor_present: boolean
+  digital_signature_present: boolean
+  general_runtime_status: string
+}
+
+export interface JudgeFlagshipEvidence {
+  source_type: 'COMMITTED_HISTORICAL_EVIDENCE' | 'UNAVAILABLE'
+  available: boolean
+  reason?: string
+  source_file?: string
+  timestamp?: string
+  run_id?: string
+  status?: string
+  asset?: string
+  identity_status?: string
+  retrieval_mode?: string
+  chunk_count?: number
+  sandbox_used?: boolean
+  approval_required?: boolean
+  artifact_verified?: boolean
+  external_calls?: number
+  validation_checks_passed?: number
+  validation_checks_total?: number
+  failed_checks?: Record<string, boolean>
+}
+
+export interface JudgeEvaluationEvidence {
+  source_type: 'FROZEN_EVALUATION_SNAPSHOT' | 'UNAVAILABLE'
+  available: boolean
+  reason?: string
+  source_file?: string
+  historical_snapshot?: boolean
+  generated_at?: string
+  source_repository_commit?: string
+  matches_current_head?: boolean
+  industrial?: { passed: number; total: number }
+  rag?: {
+    queries_total: number
+    hit_at_1: number
+    hit_at_3: number
+    hit_at_5: number
+    mrr: number
+    primary_source_at_1: number
+    provenance_complete_hits: number
+    total_hits: number
+    foreign_asset_hits: number
+  }
+  asset_identity?: { passed: number; total: number }
+  routing?: { passed: number; total: number; metrics?: Record<string, unknown> }
+  runtime_resilience?: { passed: number; total: number }
+  sovereignty_security?: { passed: number; total: number }
+  artifact_sandbox?: { passed: number; total: number }
+  flagship?: { checks_passed: number; checks_total: number }
+  regression_snapshot?: {
+    passed: number
+    failed: number
+    skipped: number
+    total: number
+    historical_snapshot: boolean
+    source_generated_at: string
+    source_repository_commit: string
+  }
+}
+
+export interface JudgeOverview {
+  generated_at: string
+  repository: {
+    commit: string | null
+  }
+  runtime: JudgeRuntime
+  governance: JudgeGovernance
+  latest_terminal_run: JudgeRunDetail | null
+  flagship: JudgeFlagshipEvidence
+  evaluation: JudgeEvaluationEvidence
+  claim_boundaries: JudgeClaimBoundaries
+}
+
+export interface JudgeRunDetail {
+  run_id: string
+  approval_status: string
+  asset: {
+    requested_tag: string | null
+    canonical_tag: string | null
+    identity_status: string | null
+    identity_source: string | null
+  }
+  retrieval: {
+    chunk_count: number | null
+    unique_asset_tags: string[]
+    source_files: string[]
+    document_types: string[]
+    retrieval_modes: string[]
+  }
+  calculations: {
+    any_threshold_breach: boolean | null
+    breached_signals: string[]
+    inspection_findings: string[]
+    vendor_parts: string[]
+    sop_requirements: string[]
+    sandbox_used: boolean | null
+  }
+  execution_trace: {
+    executed_nodes: string[]
+  }
+  routing: {
+    task_type: string | null
+    selected_model: string | null
+    models_required: string[]
+    requires_rag: boolean | null
+    requires_tools: boolean | null
+    local_only: boolean | null
+    all_local: boolean | null
+    confidence: number | null
+    reason: string | null
+  }
+  actual_model_execution: {
+    recorded_models: string[]
+    status: string
+  }
+  human_review: {
+    approval_required: boolean
+    status: string
+    reviewer_id: string | null
+    reviewer_comment: string | null
+    reviewer_identity_verified: boolean
+    created_at: string | null
+    reviewed_at: string | null
+  }
+  artifact: {
+    logical_path: string
+    sha256: string | null
+    verification_ok: boolean | null
+  }
+  receipt: {
+    available: boolean
+    receipt_id?: string
+    schema_version?: string
+    receipt_sha256?: string
+    valid?: boolean
+    checks?: Record<string, boolean>
+  }
+  chain: {
+    linked: boolean
+    global_chain_valid: boolean
+    global_chain_status: string
+    sequence_no?: number
+    previous_chain_sha256?: string
+    chain_sha256?: string
+  }
+  sovereignty: {
+    external_calls_recorded: number
+    network_guard_scope: string
+    whole_machine_airgap_certified: boolean
+  }
+}
