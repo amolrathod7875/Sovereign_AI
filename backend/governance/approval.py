@@ -435,6 +435,22 @@ class ApprovalService:
                     raise ApprovalConflictError(
                         f"sovereignty receipt creation failed for {run_id}: {receipt_error}"
                     ) from receipt_error
+                try:
+                    from governance.receipt_chain import ReceiptChainService
+
+                    chain_svc = ReceiptChainService(db_path=self.db_path)
+                    chain_svc._append_in_transaction(
+                        conn=conn,
+                        run_id=run_id,
+                        receipt_id=receipt_id,
+                        receipt_sha256=receipt_sha256,
+                        approval_status=new_status.value,
+                        linked_at=now,
+                    )
+                except Exception as chain_error:
+                    raise ApprovalConflictError(
+                        f"receipt chain append failed for {run_id}: {chain_error}"
+                    ) from chain_error
                 conn.execute("COMMIT")
             except Exception:
                 try:

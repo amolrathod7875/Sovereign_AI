@@ -19,6 +19,7 @@ from app.api import (
     artifacts,
     approvals,
     receipts,
+    receipt_chain,
 )
 from app.storage.postgres import init_db
 from app.storage.qdrant import init_qdrant
@@ -74,6 +75,7 @@ app.include_router(vision.router, prefix="/api/vision", tags=["vision"])
 app.include_router(artifacts.router, prefix="/api/artifacts", tags=["artifacts"])
 app.include_router(approvals.router, prefix="/api/approvals", tags=["approvals"])
 app.include_router(receipts.router, prefix="/api/receipts", tags=["receipts"])
+app.include_router(receipt_chain.router, prefix="/api/receipt-chain", tags=["receipt-chain"])
 
 
 @app.get("/")
