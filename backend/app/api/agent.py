@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.schemas import RoutingDecision
+from governance.approval import ApprovalService, ApprovalConflictError, ArtifactIntegrityError
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -59,6 +60,8 @@ class AgentRunResponse(BaseModel):
     analysis_type: str = "general"
     external_calls: int = 0
     routing: Optional[RoutingDecision] = None
+    human_review_status: Optional[str] = None
+    approval_record_available: bool = False
 
 
 def _to_response(result: Dict[str, Any]) -> AgentRunResponse:
@@ -118,7 +121,33 @@ async def run_agent(req: AgentRunRequest):
         raise HTTPException(status_code=500, detail=f"agent run failed: {e}")
 
     _RUNS[run_id] = result
-    return _to_response(result)
+
+    human_review_status = "NOT_REQUIRED"
+    approval_record_available = False
+    if result.get("approval_required"):
+        try:
+            approval_svc = ApprovalService()
+            record = approval_svc.create_pending_from_run(result)
+            if record is not None:
+                human_review_status = record.status
+                approval_record_available = True
+            else:
+                human_review_status = "NOT_REQUIRED"
+                approval_record_available = False
+        except ApprovalConflictError as e:
+            logger.error("approval registration conflict: %s", e)
+            raise HTTPException(status_code=422, detail=f"approval registration failed: {e}")
+        except ArtifactIntegrityError as e:
+            logger.error("approval artifact integrity error: %s", e)
+            raise HTTPException(status_code=409, detail=f"approval registration failed: {e}")
+        except Exception as e:
+            logger.error("approval registration failed: %s", e)
+            raise HTTPException(status_code=500, detail=f"approval registration failed: {e}")
+
+    resp = _to_response(result)
+    resp.human_review_status = human_review_status
+    resp.approval_record_available = approval_record_available
+    return resp
 
 
 @router.get("/runs")

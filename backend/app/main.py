@@ -17,6 +17,7 @@ from app.api import (
     coder,
     vision,
     artifacts,
+    approvals,
 )
 from app.storage.postgres import init_db
 from app.storage.qdrant import init_qdrant
@@ -70,6 +71,7 @@ app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(coder.router, prefix="/api/coder", tags=["coder"])
 app.include_router(vision.router, prefix="/api/vision", tags=["vision"])
 app.include_router(artifacts.router, prefix="/api/artifacts", tags=["artifacts"])
+app.include_router(approvals.router, prefix="/api/approvals", tags=["approvals"])
 
 
 @app.get("/")
