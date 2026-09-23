@@ -182,6 +182,9 @@ class ApprovalService:
             "external_calls": result.get("external_calls"),
             "routing": result.get("routing"),
             "trace": result.get("trace"),
+            "vision_evidence": result.get("vision_evidence"),
+            "vision_tags": result.get("vision_tags"),
+            "input_binding": result.get("input_binding"),
         }
         return json.dumps(data, default=str)
 
@@ -395,6 +398,43 @@ class ApprovalService:
                     raise ApprovalConflictError(
                         f"concurrent transition failed for {run_id}"
                     )
+                terminal_cur = conn.execute(
+                    "SELECT * FROM approval_records WHERE run_id = ?",
+                    (run_id,),
+                )
+                terminal_row = terminal_cur.fetchone()
+                if not terminal_row:
+                    raise ApprovalConflictError(
+                        f"terminal approval record missing after transition: {run_id}"
+                    )
+                terminal_record = ApprovalRecord(**dict(terminal_row))
+                try:
+                    from governance.receipt import ReceiptService, _compute_receipt_sha256
+
+                    receipt_svc = ReceiptService(
+                        db_path=self.db_path, approved_roots=self.approved_roots
+                    )
+                    payload = receipt_svc._build_payload(
+                        terminal_record, terminal_record.snapshot, now
+                    )
+                    receipt_id = receipt_svc._build_receipt_id(run_id)
+                    receipt_sha256 = _compute_receipt_sha256(payload)
+                    receipt_svc._ensure_schema(conn)
+                    receipt_svc._insert(
+                        conn,
+                        run_id=run_id,
+                        receipt_id=receipt_id,
+                        schema_version="1.0",
+                        created_at=now,
+                        approval_status=new_status.value,
+                        artifact_sha256=terminal_record.artifact_sha256,
+                        payload=payload,
+                        receipt_sha256=receipt_sha256,
+                    )
+                except Exception as receipt_error:
+                    raise ApprovalConflictError(
+                        f"sovereignty receipt creation failed for {run_id}: {receipt_error}"
+                    ) from receipt_error
                 conn.execute("COMMIT")
             except Exception:
                 try:

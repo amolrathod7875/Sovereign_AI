@@ -19,7 +19,9 @@ from governance.approval import (
     ApprovalNotFoundError,
     ApprovalConflictError,
     ArtifactIntegrityError,
+    ApprovalStatus,
 )
+from governance.receipt import ReceiptService, ReceiptNotFoundError
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -83,7 +85,12 @@ async def get_record(run_id: str) -> dict:
         raise HTTPException(status_code=404, detail="approval record not found")
     except ApprovalConflictError:
         raise HTTPException(status_code=409, detail="approval conflict")
-    return _record_to_dict(record)
+    body = _record_to_dict(record)
+    body["receipt_available"] = record.status in (
+        ApprovalStatus.APPROVED,
+        ApprovalStatus.REJECTED,
+    )
+    return body
 
 
 @router.post("/{run_id}/approve")
@@ -99,7 +106,16 @@ async def approve_run(run_id: str, body: ApproveRequest) -> dict:
         raise HTTPException(status_code=409, detail=str(e))
     except ApprovalConflictError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    return _record_to_dict(record)
+    body = _record_to_dict(record)
+    try:
+        receipt_svc = ReceiptService(db_path=_service.db_path)
+        receipt = receipt_svc.get_receipt(run_id)
+        body["receipt_available"] = True
+        body["receipt_id"] = receipt.receipt_id
+        body["receipt_sha256"] = receipt.receipt_sha256
+    except ReceiptNotFoundError:
+        body["receipt_available"] = False
+    return body
 
 
 @router.post("/{run_id}/reject")
@@ -118,4 +134,13 @@ async def reject_run(run_id: str, body: RejectRequest) -> dict:
         raise HTTPException(status_code=409, detail=str(e))
     except ApprovalConflictError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    return _record_to_dict(record)
+    body = _record_to_dict(record)
+    try:
+        receipt_svc = ReceiptService(db_path=_service.db_path)
+        receipt = receipt_svc.get_receipt(run_id)
+        body["receipt_available"] = True
+        body["receipt_id"] = receipt.receipt_id
+        body["receipt_sha256"] = receipt.receipt_sha256
+    except ReceiptNotFoundError:
+        body["receipt_available"] = False
+    return body
