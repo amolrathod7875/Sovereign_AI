@@ -1,0 +1,888 @@
+{
+  "generated_at": "2026-09-23T01:58:46Z",
+  "repository_commit": "b2ce3cc03db9358a834303a826cec655ab33397e",
+  "categories": {
+    "regression": {
+      "evidence_level": "UNIT",
+      "passed": 304,
+      "failed": 2,
+      "not_available": 0,
+      "total": 320,
+      "metrics": {
+        "passed": 304,
+        "failed": 2,
+        "skipped": 14,
+        "exit_code": 1
+      },
+      "notes": "Regression: 304 passed, 2 failed, 14 skipped",
+      "cases": []
+    },
+    "industrial_golden": {
+      "evidence_level": "INTEGRATION",
+      "passed": 10,
+      "failed": 0,
+      "not_available": 0,
+      "total": 10,
+      "metrics": {
+        "passed": 10,
+        "total": 10,
+        "pass_rate": 100.0,
+        "evidence_supported": false,
+        "external_calls": 0
+      },
+      "notes": "Reuses backend/agent/evaluation/evaluate.py against committed live evidence. Ground truth NEVER exposed to agent.",
+      "cases": [
+        {
+          "name": "temperature_breach_detected",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "breached_signals=['TI-1001_reactor_temp_C', 'PI-1001_reactor_pressure_bar', 'VI-1001_reactor_vibration_mm_s']",
+          "provenance": ""
+        },
+        {
+          "name": "pressure_breach_detected",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "pressure signal referenced with breach language",
+          "provenance": ""
+        },
+        {
+          "name": "vibration_breach_detected",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "vibration signal referenced with breach language",
+          "provenance": ""
+        },
+        {
+          "name": "catalyst_hotspot_detected",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "inspection_findings=['catalyst_hotspot', 'thermowell_drift', 'gasket_weep']",
+          "provenance": ""
+        },
+        {
+          "name": "thermowell_drift_detected",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "inspection_findings=['catalyst_hotspot', 'thermowell_drift', 'gasket_weep']",
+          "provenance": ""
+        },
+        {
+          "name": "gasket_weep_detected",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "inspection_findings=['catalyst_hotspot', 'thermowell_drift', 'gasket_weep']",
+          "provenance": ""
+        },
+        {
+          "name": "vendor_recommendation_detected",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "vendor_parts=['HRS-CAT-22', 'HRS-GSK-1001', 'HRS-TW-1001']",
+          "provenance": ""
+        },
+        {
+          "name": "controlled_shutdown_recommended",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "shutdown language present",
+          "provenance": ""
+        },
+        {
+          "name": "corrective_maintenance_recommended",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "corrective action language present",
+          "provenance": ""
+        },
+        {
+          "name": "approval_required",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "approval_required=True",
+          "provenance": ""
+        }
+      ]
+    },
+    "rag_retrieval": {
+      "evidence_level": "INTEGRATION",
+      "passed": 6,
+      "failed": 0,
+      "not_available": 0,
+      "total": 6,
+      "metrics": {
+        "queries_total": 6,
+        "queries_with_expected_hit": 6,
+        "hit_at_1": 2,
+        "hit_at_3": 4,
+        "hit_at_5": 6,
+        "mrr": 0.5556,
+        "primary_source_at_1": 2,
+        "provenance_complete_hits": 30,
+        "total_hits": 30,
+        "foreign_asset_hits": 0,
+        "retrieval_mode_counts": {
+          "hybrid": 30
+        }
+      },
+      "notes": "Real local HybridRetriever queries. No mocks. Hit@K and MRR calculated from actual rankings.",
+      "cases": [
+        {
+          "name": "query_What_are_the_high-temperature_limits_for",
+          "passed": true,
+          "expected": [
+            "equipment_manual",
+            "operating_sop",
+            "sensor_dataset"
+          ],
+          "actual": true,
+          "detail": "rank1=sensor_dataset rank2=operating_sop rank3=inspection_report first_relevant=1 primary_at_1=True RR=1.0 mode=hybrid",
+          "provenance": ""
+        },
+        {
+          "name": "query_What_does_the_maintenance_SOP_require_wh",
+          "passed": true,
+          "expected": [
+            "operating_sop",
+            "preventive_maintenance_sop"
+          ],
+          "actual": true,
+          "detail": "rank1=preventive_maintenance_sop rank2=operating_sop rank3=vendor_correspondence first_relevant=1 primary_at_1=True RR=1.0 mode=hybrid",
+          "provenance": ""
+        },
+        {
+          "name": "query_What_abnormal_conditions_were_observed_d",
+          "passed": true,
+          "expected": [
+            "inspection_report"
+          ],
+          "actual": true,
+          "detail": "rank1=canonical_profile rank2=sensor_dataset rank3=operating_sop first_relevant=4 primary_at_1=False RR=0.25 mode=hybrid",
+          "provenance": ""
+        },
+        {
+          "name": "query_What_parts_did_the_vendor_recommend?",
+          "passed": true,
+          "expected": [
+            "vendor_correspondence"
+          ],
+          "actual": true,
+          "detail": "rank1=canonical_profile rank2=vendor_correspondence rank3=canonical_profile first_relevant=2 primary_at_1=False RR=0.5 mode=hybrid",
+          "provenance": ""
+        },
+        {
+          "name": "query_Does_the_sensor_data_show_a_threshold_br",
+          "passed": true,
+          "expected": [
+            "sensor_dataset"
+          ],
+          "actual": true,
+          "detail": "rank1=operating_sop rank2=plant_context rank3=sensor_dataset first_relevant=3 primary_at_1=False RR=0.3333 mode=hybrid",
+          "provenance": ""
+        },
+        {
+          "name": "query_Should_R-1001_be_shut_down?",
+          "passed": true,
+          "expected": [
+            "inspection_report",
+            "operating_sop",
+            "preventive_maintenance_sop"
+          ],
+          "actual": true,
+          "detail": "rank1=maintenance_approval_note rank2=sensor_dataset rank3=maintenance_approval_note first_relevant=4 primary_at_1=False RR=0.25 mode=hybrid",
+          "provenance": ""
+        }
+      ]
+    },
+    "asset_identity": {
+      "evidence_level": "UNIT",
+      "passed": 18,
+      "failed": 0,
+      "not_available": 0,
+      "total": 18,
+      "metrics": {},
+      "notes": "Uses real deterministic resolver. Temp registries used only where required.",
+      "cases": [
+        {
+          "name": "known_exact_asset",
+          "passed": true,
+          "expected": "VERIFIED_TEXT_ONLY",
+          "actual": "VERIFIED_TEXT_ONLY",
+          "detail": "expected='VERIFIED_TEXT_ONLY' actual='VERIFIED_TEXT_ONLY'",
+          "provenance": ""
+        },
+        {
+          "name": "case_whitespace_normalization",
+          "passed": true,
+          "expected": "VERIFIED_TEXT_ONLY",
+          "actual": "VERIFIED_TEXT_ONLY",
+          "detail": "expected='VERIFIED_TEXT_ONLY' actual='VERIFIED_TEXT_ONLY'",
+          "provenance": ""
+        },
+        {
+          "name": "ocr_confusable_not_corrected",
+          "passed": true,
+          "expected": "UNKNOWN_ASSET",
+          "actual": "UNKNOWN_ASSET",
+          "detail": "expected='UNKNOWN_ASSET' actual='UNKNOWN_ASSET'",
+          "provenance": ""
+        },
+        {
+          "name": "production_unknown_R1002",
+          "passed": true,
+          "expected": "UNKNOWN_ASSET",
+          "actual": "UNKNOWN_ASSET",
+          "detail": "expected='UNKNOWN_ASSET' actual='UNKNOWN_ASSET'",
+          "provenance": ""
+        },
+        {
+          "name": "temp_registry_known_R1002",
+          "passed": true,
+          "expected": "VERIFIED_TEXT_ONLY",
+          "actual": "VERIFIED_TEXT_ONLY",
+          "detail": "expected='VERIFIED_TEXT_ONLY' actual='VERIFIED_TEXT_ONLY'",
+          "provenance": ""
+        },
+        {
+          "name": "p2104a_p2104b_distinct",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "vision_exact_match_allows",
+          "passed": true,
+          "expected": "VERIFIED",
+          "actual": "VERIFIED",
+          "detail": "expected='VERIFIED' actual='VERIFIED'",
+          "provenance": ""
+        },
+        {
+          "name": "related_tags_no_conflict",
+          "passed": true,
+          "expected": "VERIFIED",
+          "actual": "VERIFIED",
+          "detail": "expected='VERIFIED' actual='VERIFIED'",
+          "provenance": ""
+        },
+        {
+          "name": "vision_asset_missing_blocks",
+          "passed": true,
+          "expected": "CONFLICT",
+          "actual": "CONFLICT",
+          "detail": "expected='CONFLICT' actual='CONFLICT'",
+          "provenance": ""
+        },
+        {
+          "name": "unknown_requested_asset_blocks",
+          "passed": true,
+          "expected": "UNKNOWN_ASSET",
+          "actual": "UNKNOWN_ASSET",
+          "detail": "expected='UNKNOWN_ASSET' actual='UNKNOWN_ASSET'",
+          "provenance": ""
+        },
+        {
+          "name": "empty_asset_tag_blocks",
+          "passed": true,
+          "expected": "MISSING_ASSET",
+          "actual": "MISSING_ASSET",
+          "detail": "expected='MISSING_ASSET' actual='MISSING_ASSET'",
+          "provenance": ""
+        },
+        {
+          "name": "identity_blocked_skips_retrieval",
+          "passed": true,
+          "expected": "RETRIEVAL_BLOCKED",
+          "actual": "RETRIEVAL_BLOCKED",
+          "detail": "expected='RETRIEVAL_BLOCKED' actual='RETRIEVAL_BLOCKED'",
+          "provenance": ""
+        },
+        {
+          "name": "identity_blocked_no_artifact",
+          "passed": true,
+          "expected": "IDENTITY_BLOCKED",
+          "actual": "IDENTITY_BLOCKED",
+          "detail": "expected='IDENTITY_BLOCKED' actual='IDENTITY_BLOCKED'",
+          "provenance": ""
+        },
+        {
+          "name": "retrieval_uses_canonical_tag",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "foreign_vision_tag_not_primary",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "foreign_asset_hit_dropped",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "raw_vision_tags_preserved",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "identity_no_network_call",
+          "passed": true,
+          "expected": "VERIFIED_TEXT_ONLY",
+          "actual": "VERIFIED_TEXT_ONLY",
+          "detail": "expected='VERIFIED_TEXT_ONLY' actual='VERIFIED_TEXT_ONLY'",
+          "provenance": ""
+        }
+      ]
+    },
+    "routing": {
+      "evidence_level": "UNIT",
+      "passed": 10,
+      "failed": 0,
+      "not_available": 0,
+      "total": 10,
+      "metrics": {
+        "general_model_runtime_status": "UNAVAILABLE"
+      },
+      "notes": "Routing decision accuracy only. Does not imply model server availability.",
+      "cases": [
+        {
+          "name": "coding_task_routes_to_coder",
+          "passed": true,
+          "expected": "qwen-coder",
+          "actual": "qwen-coder",
+          "detail": "expected='qwen-coder' actual='qwen-coder'",
+          "provenance": ""
+        },
+        {
+          "name": "vision_task_routes_to_vision",
+          "passed": true,
+          "expected": "vision",
+          "actual": "vision",
+          "detail": "expected='vision' actual='vision'",
+          "provenance": ""
+        },
+        {
+          "name": "rag_task_routes_to_general",
+          "passed": true,
+          "expected": "general",
+          "actual": "general",
+          "detail": "expected='general' actual='general'",
+          "provenance": ""
+        },
+        {
+          "name": "multimodal_routes_to_vision_general",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "general_text_routes_to_general",
+          "passed": true,
+          "expected": "general",
+          "actual": "general",
+          "detail": "expected='general' actual='general'",
+          "provenance": ""
+        },
+        {
+          "name": "explicit_code_override_routes_to_coder",
+          "passed": true,
+          "expected": "qwen-coder",
+          "actual": "qwen-coder",
+          "detail": "expected='qwen-coder' actual='qwen-coder'",
+          "provenance": ""
+        },
+        {
+          "name": "explicit_vision_override_routes_to_vision",
+          "passed": true,
+          "expected": "vision",
+          "actual": "vision",
+          "detail": "expected='vision' actual='vision'",
+          "provenance": ""
+        },
+        {
+          "name": "local_only_enforcement",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "missing_capability_raises",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "coding_with_tools_requires_tools",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        }
+      ]
+    },
+    "runtime_resilience": {
+      "evidence_level": "INTEGRATION",
+      "passed": 14,
+      "failed": 0,
+      "not_available": 0,
+      "total": 14,
+      "metrics": {
+        "pytest_passed": 14,
+        "pytest_failed": 0,
+        "pytest_skipped": 0,
+        "exit_code": 0
+      },
+      "notes": "Uses existing tests via subprocess. No live model servers required.",
+      "cases": [
+        {
+          "name": "coder_unavailable_503",
+          "passed": true,
+          "expected": 503,
+          "actual": 503,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "coder_transport_503",
+          "passed": true,
+          "expected": 503,
+          "actual": 503,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "coder_timeout_504",
+          "passed": true,
+          "expected": 504,
+          "actual": 504,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "coder_malformed_payload",
+          "passed": true,
+          "expected": "CONTROLLED_FAILURE",
+          "actual": "CONTROLLED_FAILURE",
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "coder_recovery_after_failure",
+          "passed": true,
+          "expected": 200,
+          "actual": 200,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "vision_unavailable_503",
+          "passed": true,
+          "expected": 503,
+          "actual": 503,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "vision_transport_503",
+          "passed": true,
+          "expected": 503,
+          "actual": 503,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "vision_timeout_504",
+          "passed": true,
+          "expected": 504,
+          "actual": 504,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "vision_malformed_upstream_502",
+          "passed": true,
+          "expected": 502,
+          "actual": 502,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "vision_invalid_input_400",
+          "passed": true,
+          "expected": 400,
+          "actual": 400,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "vision_recovery_after_failure",
+          "passed": true,
+          "expected": 200,
+          "actual": 200,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "gpu_admission_busy_429",
+          "passed": true,
+          "expected": 429,
+          "actual": 429,
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "gpu_admission_retry_after",
+          "passed": true,
+          "expected": "5",
+          "actual": "5",
+          "detail": "verified by test suite",
+          "provenance": ""
+        },
+        {
+          "name": "gpu_lock_recovers",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "verified by test suite",
+          "provenance": ""
+        }
+      ]
+    },
+    "sovereignty_security": {
+      "evidence_level": "UNIT",
+      "passed": 12,
+      "failed": 0,
+      "not_available": 0,
+      "total": 12,
+      "metrics": {},
+      "notes": "Evaluates implemented controls only. Not whole-machine air-gap certification.",
+      "cases": [
+        {
+          "name": "network_guard_blocks_external",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "loopback_allowed",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "private_local_endpoint_valid",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "malicious_public_endpoint_rejected",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "vision_path_allowlist_rejects_unauthorized",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "sandbox_network_import_blocked",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "sandbox_out_of_tree_write_blocked",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "local_embedding_local_files_only",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "flagship_external_calls_zero",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "identity_no_network",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "general_missing_no_cloud_fallback",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "model_routing_local_only",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        }
+      ]
+    },
+    "artifact_sandbox": {
+      "evidence_level": "LIVE",
+      "passed": 11,
+      "failed": 0,
+      "not_available": 0,
+      "total": 11,
+      "metrics": {},
+      "notes": "Uses committed flagship evidence where available. Checks marked LIVE_LOCAL_ARTIFACT require the locally retained DOCX and are not fully reproducible from a clean repository clone.",
+      "cases": [
+        {
+          "name": "sandbox_executes_local_calculation",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "COMMITTED_TEST"
+        },
+        {
+          "name": "sandbox_network_import_blocked",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "COMMITTED_TEST"
+        },
+        {
+          "name": "sandbox_timeout_safe",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "COMMITTED_TEST"
+        },
+        {
+          "name": "flagship_sandbox_used_true",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "COMMITTED_JSON"
+        },
+        {
+          "name": "flagship_artifact_exists",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "COMMITTED_JSON"
+        },
+        {
+          "name": "artifact_verifier_passed",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "COMMITTED_JSON"
+        },
+        {
+          "name": "expected_asset_tag_present",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "COMMITTED_JSON"
+        },
+        {
+          "name": "source_references_present",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "COMMITTED_JSON"
+        },
+        {
+          "name": "disclaimer_present",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "COMMITTED_JSON"
+        },
+        {
+          "name": "draft_pending_human_present",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "LIVE_LOCAL_ARTIFACT"
+        },
+        {
+          "name": "false_final_approval_absent",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": "LIVE_LOCAL_ARTIFACT"
+        }
+      ]
+    },
+    "flagship_live": {
+      "evidence_level": "LIVE",
+      "passed": 9,
+      "failed": 0,
+      "not_available": 0,
+      "total": 9,
+      "metrics": {
+        "flagship_checks_total": 14,
+        "flagship_checks_passed": 14
+      },
+      "notes": "Read-only from committed reports/flagship_workflow_latest.json. Not re-executed. No new GPU inference.",
+      "cases": [
+        {
+          "name": "asset_R1001",
+          "passed": true,
+          "expected": "R-1001",
+          "actual": "R-1001",
+          "detail": "expected='R-1001' actual='R-1001'",
+          "provenance": ""
+        },
+        {
+          "name": "identity_verified",
+          "passed": true,
+          "expected": "VERIFIED",
+          "actual": "VERIFIED",
+          "detail": "expected='VERIFIED' actual='VERIFIED'",
+          "provenance": ""
+        },
+        {
+          "name": "retrieval_hybrid",
+          "passed": true,
+          "expected": "hybrid",
+          "actual": "hybrid",
+          "detail": "expected='hybrid' actual='hybrid'",
+          "provenance": ""
+        },
+        {
+          "name": "chunks_36",
+          "passed": true,
+          "expected": 36,
+          "actual": 36,
+          "detail": "expected=36 actual=36",
+          "provenance": ""
+        },
+        {
+          "name": "sandbox_used_true",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "approval_required_true",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "artifact_verified_true",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": "expected=True actual=True",
+          "provenance": ""
+        },
+        {
+          "name": "external_calls_zero",
+          "passed": true,
+          "expected": 0,
+          "actual": 0,
+          "detail": "expected=0 actual=0",
+          "provenance": ""
+        },
+        {
+          "name": "validation_14_14",
+          "passed": true,
+          "expected": 14,
+          "actual": 14,
+          "detail": "expected=14 actual=14",
+          "provenance": ""
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Full industrial corpus currently centers on R-1001.",
+    "Flagship live workflow validated one real P&ID scenario, not all industrial diagrams.",
+    "Qwen2.5-VL 3B may misread small/dense tags.",
+    "General reasoning model is registered in the router but its local runtime is currently unavailable because no general model server is running on localhost:8001 and no local general weights are present.",
+    "RAG currently has hybrid dense + BM25 but no validated active reranker.",
+    "Hybrid retrieval recovers all expected primary evidence within top-5, but some queries rank secondary/context documents above the primary source at rank 1. No reranker is currently active.",
+    "Security controls demonstrate application-level sovereignty; whole-machine physical air-gap depends on deployment/network environment.",
+    "Human approve/reject is not implemented yet.",
+    "Artifact remains DRAFT pending human authorization.",
+    "GPU flagship run used very tight VRAM headroom; do not generalize to arbitrary workloads."
+  ]
+}
