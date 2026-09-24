@@ -1,412 +1,867 @@
 # Sovereign AI
 
-Self-hosted, air-gapped AI workbench for confidential industrial work.
+**On-Premise Agentic AI Workbench for Confidential Industrial Intelligence**  
+**Problem Statement:** PS 26117
 
-Sovereign AI is a fully local FastAPI + LangGraph backend, a React + Vite
-frontend, and a curated set of open-weight GGUF models. Every model,
-embedder, vector store, reranker, and code-execution sandbox runs on the
-host machine. No external AI service is ever contacted. A network
-guard and a real-time network monitor prove this in the UI.
+Sovereign AI is a local-first industrial AI workbench designed for confidential engineering workflows involving P&IDs, inspection reports, operating procedures, sensor data, equipment manuals, vendor correspondence, calculations, code generation, and governed decision support.
+
+The platform combines local open-weight models, hybrid retrieval, LangGraph orchestration, sandboxed tools, exact asset identity checks, human approval/rejection, cryptographic Sovereignty Receipts, a tamper-evident receipt chain, and a read-only Judge Mode that separates live runtime evidence from historical evaluation evidence.
+
+> **Core principle:** an AI recommendation is not a human authorization.
+
+> **Sovereignty scope:** Sovereign AI enforces an application-level local network boundary for agent/model execution. It is designed for on-premises and offline deployments, but it does **not** claim whole-machine air-gap certification.
 
 ---
 
-## Table of contents
+## Table of Contents
 
+- [What Sovereign AI Does](#what-sovereign-ai-does)
+- [Current Product Status](#current-product-status)
 - [Architecture](#architecture)
-- [Local inference](#local-inference)
-- [Models](#models)
-- [RAG](#rag)
-- [Security model](#security-model)
+- [Execution Modes](#execution-modes)
+- [Local Models](#local-models)
+- [Hybrid RAG](#hybrid-rag)
+- [Industrial Agent Workflow](#industrial-agent-workflow)
+- [Governance and Human Authorization](#governance-and-human-authorization)
+- [Sovereignty Receipt](#sovereignty-receipt)
+- [Tamper-Evident Receipt Chain](#tamper-evident-receipt-chain)
+- [Judge Mode](#judge-mode)
+- [Security Boundary](#security-boundary)
+- [Measured Evidence](#measured-evidence)
 - [Ports](#ports)
-- [Quick start](#quick-start)
-- [Project layout](#project-layout)
+- [Quick Start](#quick-start)
+- [Demo Queries](#demo-queries)
+- [Project Layout](#project-layout)
 - [Testing](#testing)
-- [Known limitations](#known-limitations)
-- [Roadmap](#roadmap)
+- [Known Limitations](#known-limitations)
+- [What We Do Not Claim](#what-we-do-not-claim)
+
+---
+
+## What Sovereign AI Does
+
+Sovereign AI provides five distinct local execution paths instead of treating every request as the same chatbot task.
+
+| Workload | Execution path |
+|---|---|
+| General questions | Qwen2.5-3B-Instruct |
+| Grounded knowledge questions | Hybrid Qdrant + BM25 retrieval → Qwen2.5-3B-Instruct |
+| Coding and debugging | Qwen2.5-Coder-3B-Instruct |
+| P&ID / image analysis | Qwen2.5-VL-3B-Instruct |
+| Multi-step industrial maintenance decisions | LangGraph industrial agent + identity + RAG + tools + artifact + governance |
+
+The Workbench deliberately distinguishes **routing** from **actual execution**. A router decision never counts as proof that a model actually ran.
+
+### Key capabilities
+
+- Local open-weight model serving through `llama-cpp-python`
+- General QA, coding, vision, knowledge/RAG, and industrial-agent workflows
+- Exact asset identity verification before industrial retrieval
+- Hybrid semantic + lexical retrieval with source provenance
+- Local calculations and sandboxed code execution
+- DOCX/XLSX/PPTX-capable artifact tooling
+- Persistent human approval/rejection records
+- Artifact-integrity verification before terminal human decisions
+- Sovereignty Receipt generation
+- Tamper-evident local receipt hash chain
+- Application-level NetworkGuard with external-call accounting
+- Read-only Judge Mode for competition/demo evidence
+
+---
+
+## Current Product Status
+
+The current demo host has all three primary local model roles provisioned and validated through the Workbench:
+
+- **General:** online
+- **Coder:** online
+- **Vision:** online
+- **Hybrid RAG:** operational
+- **Industrial LangGraph workflow:** operational
+- **Human approval/rejection:** persistent
+- **Sovereignty Receipt:** operational
+- **Receipt hash chain:** operational
+- **Judge Mode:** operational
+
+The latest product-freeze acceptance validated:
+
+- General QA without industrial-workflow contamination
+- RAG QA with local evidence and General synthesis
+- Cross-document RAG
+- Industrial workflow dispatch
+- Coder routing
+- Vision routing
+- Honest separation of routing vs actual execution
+- Honest separation of RAG intent vs actual retrieval
+- No HTTP 500 errors in the final six-query acceptance sequence
+- `3/3` primary model services reported online on the validated demo host
 
 ---
 
 ## Architecture
 
-| Layer            | Technology                                                            |
-|------------------|-----------------------------------------------------------------------|
-| Frontend         | React 18 + TypeScript + Vite 5 + Tailwind CSS                        |
-| Backend API      | Python 3.11 + FastAPI 0.115 + Pydantic 2 + uvicorn                   |
-| Agent runtime    | LangGraph 0.2 + LangChain 0.3                                        |
-| Model serving    | **llama-cpp-python 0.3.35** (OpenAI-compatible FastAPI wrapper)      |
-| Vector DB        | Qdrant (embedded on-disk) + BM25 (bm25s)                             |
-| Embeddings       | sentence-transformers (`all-MiniLM-L6-v2`, 384-dim, offline)         |
-| Reranker         | Local BGE-style reranker                                              |
-| Document parser  | PyMuPDF (digital PDF text + page metadata)                           |
-| OCR              | PaddleOCR (separate environment, see `prerequistes/PaddleOCR.md`)    |
-| Code sandbox     | In-process `agent/coder/sandbox.py` (PEP 451 import hook + socket guard) — Piston adapter available for `/api/sandbox/execute` |
-| Office artifacts | python-docx + openpyxl + python-pptx                                  |
-| Relational DB    | PostgreSQL 16                                                         |
-| Container runtime| Docker Compose                                                        |
+```mermaid
+flowchart TD
+    U[User / Engineer] --> W[React Workbench]
+    W --> R[Capability Router]
 
-> **Note:** the model serving layer is **llama-cpp-python in every profile**.
-> The `docker-compose.yml` ships a `gpu` profile that launches the three
-> llama.cpp server containers; the `cpu` profile omits them. On bare
-> metal (Windows / Linux), `scripts/serve_model.py` runs one process per
-> model on the same dedicated ports.
+    R -->|General QA| G[Qwen2.5-3B-Instruct]
+    R -->|Coding| C[Qwen2.5-Coder-3B-Instruct]
+    R -->|Vision| V[Qwen2.5-VL-3B-Instruct]
+    R -->|Knowledge| H[Hybrid RAG]
+    R -->|Industrial Decision| A[LangGraph Industrial Agent]
 
----
+    H --> Q[Embedded Qdrant]
+    H --> B[BM25]
+    H --> E[Local all-MiniLM-L6-v2 Embeddings]
+    H --> G
 
-## Local inference
+    A --> I[Exact Asset Identity]
+    I --> H
+    A --> T[Local Tools / Sandbox]
+    A --> D[Draft Recommendation / Artifact]
+    D --> P[Human Approve / Reject]
+    P --> SR[Sovereignty Receipt]
+    SR --> HC[Tamper-Evident Hash Chain]
 
-All inference is performed locally. There is no fallback to a remote
-provider — if a local server is unreachable, the API returns
-`503 Service Unavailable` and the frontend displays an honest
-"unavailable" panel (see Phase 8.1).
+    J[Judge Mode] --> S1[Live Runtime]
+    J --> S2[Persistent Governance]
+    J --> S3[Historical Flagship Evidence]
+    J --> S4[Frozen Evaluation Evidence]
+```
 
-### Coder — verified on RTX 4050
+### Technology stack
 
-| Item                  | Value                                                   |
-|-----------------------|---------------------------------------------------------|
-| Model                 | Qwen2.5-Coder-3B-Instruct, Q4_K_M GGUF (~2.0 GB)        |
-| Endpoint              | `http://localhost:8002/v1`                              |
-| Server                | `python scripts/serve_model.py --model-id qwen-coder --port 8002` |
-| Runtime               | **llama-cpp-python 0.3.35** + CUDA 12.4 + AVX2          |
-| GPU                   | NVIDIA RTX 4050, compute capability 8.9 (sm_89)         |
-| CPU                   | AMD Ryzen 5 5600G — **AVX2 yes, AVX-512 no**            |
-| Build                 | `GGML_CUDA=ON`, `GGML_AVX2=ON`, `GGML_AVX512=OFF`, `CMAKE_CUDA_ARCHITECTURES=89` |
-| Measured VRAM (init, all 36 layers on GPU) | ~840 MiB → ~3 132 MiB (delta ≈ 2.3 GB) |
-| Measured throughput   | **~32.7 tokens/sec** with `n_gpu_layers=99`, n_ctx=2048 |
-| Status                | **CUDA-accelerated local coder inference experimentally validated on RTX 4050** |
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 + TypeScript + Vite + Tailwind CSS |
+| Backend | Python 3.11 + FastAPI + Pydantic + Uvicorn |
+| Agent orchestration | LangGraph / LangChain |
+| Model runtime | `llama-cpp-python 0.3.35` |
+| Vector retrieval | Embedded Qdrant |
+| Lexical retrieval | `bm25s` |
+| Embeddings | local `all-MiniLM-L6-v2`, 384 dimensions |
+| Document parsing | PyMuPDF, python-docx, openpyxl, python-pptx |
+| OCR | PaddleOCR support in the ingestion/tooling stack |
+| Governance store | SQLite (`data/governance/approvals.sqlite3`) |
+| Optional relational service | PostgreSQL |
+| Optional external sandbox adapter | Piston |
 
-The CUDA build is documented in `reports/phase11_4_cuda_source_build.md`
-and the CPU prebuilt wheel is cached at
-`_rollback/llama_cpp_python-0.3.35-cpu-py3-none-win_amd64.whl` as a
-known-good fallback.
-
-### Vision — verified on RTX 4050
-
-| Item         | Value                                                              |
-|--------------|--------------------------------------------------------------------|
-| Model        | Qwen2.5-VL-3B-Instruct, Q4_K_M GGUF (~1.8 GB)                     |
-| mmproj       | `mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf` (~0.8 GB)                |
-| Endpoint     | `http://localhost:8003/v1` (chat-format `qwen2-vl`)                |
-| Server       | `python scripts/serve_model.py --model-id qwen-vision --port 8003` |
-| Runtime      | **llama-cpp-python 0.3.35** + CUDA 12.4 + AVX2                     |
-| GPU          | NVIDIA RTX 4050, compute capability 8.9 (sm_89)                    |
-| CPU          | AMD Ryzen 5 5600G — **AVX2 yes, AVX-512 no**                       |
-| Build        | `GGML_CUDA=ON`, `GGML_AVX2=ON`, `GGML_AVX512=OFF`, `CMAKE_CUDA_ARCHITECTURES=89` |
-| Measured VRAM (all layers on GPU) | peak ~5 832 MiB (validated for tested workload; monitor VRAM under production workloads) |
-| Measured throughput | **~23.3 tokens/sec** with `n_gpu_layers=99`, n_ctx=2048       |
-| Status       | **CUDA-accelerated local vision inference experimentally validated on RTX 4050** |
-
-### General — server present, weights absent
-
-| Item     | Value                                                     |
-|----------|-----------------------------------------------------------|
-| Endpoint | `http://localhost:8001/v1` (declared in registry)         |
-| Weights  | **No GGUF downloaded for this role yet**                  |
-| Status   | `execute_routing` returns `{used: false, reason: "general model server not running on this host"}` |
-
-The general model is reserved in the router and registry so task
-classification can already be exercised end-to-end. Provisioning a
-small Qwen 2.5 3B Instruct GGUF into `models/qwen-general/` would
-make this path live without any code change.
+> **Reranking:** the currently validated production RAG path does **not** use an active validated reranker. Retrieval is Qdrant + BM25 weighted hybrid fusion.
 
 ---
 
-## Models
+## Execution Modes
 
-| ID            | Display name                  | Endpoint              | Weights                                          | Status                                |
-|---------------|-------------------------------|-----------------------|--------------------------------------------------|---------------------------------------|
-| `general`     | Qwen2.5-3B-Instruct           | `:8001/v1`            | **absent**                                       | standby (no server)                   |
-| `qwen-coder`  | Qwen2.5-Coder-3B-Instruct     | `:8002/v1`            | `models/qwen-coder/qwen2.5-coder-3b-instruct-q4_k_m.gguf` (1.96 GB) | online — **CUDA validated on RTX 4050** |
-| `vision`      | Qwen2.5-VL-3B-Instruct        | `:8003/v1`            | `models/qwen-vision/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf` (1.80 GB) + `mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf` (0.79 GB) | online — **CUDA validated on RTX 4050** |
-| `embedding`   | BGE-large-en-v1.5             | local                 | `sentence-transformers/all-MiniLM-L6-v2` (384-d) | online                                |
-| `reranker`    | BGE-reranker-large            | local                 | local reranker                                   | online                                |
+### Auto
 
-All entries are declared `local=True`; the registry rejects endpoints
-that resolve outside the trusted-local CIDR allow-list.
+Auto mode classifies the request and dispatches it to the appropriate local capability.
+
+- Generic conceptual request → General model
+- Knowledge/document question → Hybrid RAG + General synthesis
+- Coding task → Coder model
+- Image-attached analysis → Vision model
+- Multi-signal industrial decision request → Industrial LangGraph workflow
+
+### Knowledge
+
+Knowledge mode performs local retrieval and grounded synthesis:
+
+```text
+Question
+  ↓
+Hybrid Qdrant + BM25
+  ↓
+Source evidence
+  ↓
+General model
+  ↓
+Grounded answer + evidence metadata
+```
+
+It does **not** secretly invoke the specialized maintenance agent.
+
+### Coding
+
+Coding requests use the dedicated Qwen Coder runtime and local sandbox/tooling.
+
+### Vision
+
+Vision requests require actual image/PDF input. Merely mentioning terms such as “P&ID” does not falsely create image modality.
 
 ---
 
-## RAG
+## Local Models
 
-Hybrid retrieval over an embedded on-disk Qdrant collection
-(`sovereign_knowledge`, 384-dim cosine) and a bm25s index.
+| Role | Model | Endpoint | Local weight path |
+|---|---|---|---|
+| General | Qwen2.5-3B-Instruct Q4_K_M | `http://127.0.0.1:8001/v1` | `models/qwen-general/qwen2.5-3b-instruct-q4_k_m.gguf` |
+| Coder | Qwen2.5-Coder-3B-Instruct Q4_K_M | `http://127.0.0.1:8002/v1` | `models/qwen-coder/qwen2.5-coder-3b-instruct-q4_k_m.gguf` |
+| Vision | Qwen2.5-VL-3B-Instruct Q4_K_M | `http://127.0.0.1:8003/v1` | `models/qwen-vision/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf` |
+| Vision projector | Qwen2.5-VL mmproj Q8_0 | local | `models/qwen-vision/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf` |
+| Embeddings | all-MiniLM-L6-v2 | local filesystem | `models/embeddings/all-MiniLM-L6-v2` |
 
-- **393 chunks** indexed (verified `data/rag/qdrant_db/collection/sovereign_knowledge/storage.sqlite` points = 393; matching BM25 corpus entries).
-- **Weighted fusion** rather than RRF: `0.7 × dense + 0.3 × bm25`
-  (`backend/rag/retrieval/hybrid.py:42-58`).
-- Every chunk carries `document_id`, `page`, `section` for citation
-  (`backend/rag/citations.py`).
-- Index covers the synthetic plant dataset in `data/synthetic/` plus
-  the demo corpus in `demo-data/`.
+Model weights are intentionally kept out of Git.
 
-A second Qdrant client (`backend/app/storage/qdrant.py`) is used by
-`/api/rag/*` only; the agent path uses the embedded on-disk store
-authoritatively.
+### Validated host
+
+The development/demo host uses:
+
+- NVIDIA GeForce RTX 4050 Laptop GPU, 6 GB VRAM
+- AMD Ryzen 5 5600G
+- Python 3.11.9 (`sovereign-ai` Conda environment)
+- CUDA-enabled `llama-cpp-python 0.3.35`
+
+Coder and Vision CUDA execution were historically validated on this hardware. The current demo host can expose all three model services, but 6 GB VRAM provides tight headroom; heavy concurrent inference should not be generalized beyond the tested workload.
 
 ---
 
-## Security model
+## Hybrid RAG
 
-The workbench is a sovereign runtime: **all inference, retrieval,
-embedding, OCR, file storage, and code execution stay inside the
-deployment boundary**. There is no cloud AI API, no cloud vector DB,
-no cloud OCR, no cloud file storage, no cloud embeddings, no cloud
-reranker.
+The authoritative RAG path is implemented in:
 
-**NetworkGuard** (`backend/agent/security/netguard.py`) is the
-authoritative allow-list. While active, every `socket.connect` is
-inspected; any destination outside the trusted-local CIDR list raises
-`ConnectionError` and is recorded on the guard.
+```text
+backend/rag/retrieval/hybrid.py
+```
 
-Trusted local destinations (positive allow-list):
+It combines:
 
-| Range              | Purpose                            |
-|--------------------|------------------------------------|
-| `127.0.0.0/8`      | IPv4 loopback                      |
-| `::1/128`          | IPv6 loopback                      |
-| `10.0.0.0/8`       | RFC1918 private                    |
-| `172.16.0.0/12`    | RFC1918 private                    |
-| `192.168.0.0/16`   | RFC1918 private                    |
+- **Dense semantic search:** embedded Qdrant
+- **Lexical search:** BM25
+- **Fusion:** normalized weighted fusion
+  - semantic weight: `0.7`
+  - BM25 weight: `0.3`
+- **Embedding model:** local `all-MiniLM-L6-v2`
+- **Vector dimension:** 384
+- **Collection:** `sovereign_knowledge`
 
-**Explicitly not trusted** (and verified blocked by the test suite):
+Current demo data contains **393 indexed chunks**.
 
-| Range              | Reason                                  |
-|--------------------|------------------------------------------|
-| `169.254.0.0/16`   | IPv4 link-local — includes cloud metadata `169.254.169.254` |
-| `fe80::/10`        | IPv6 link-local                          |
-| `192.0.2.0/24`     | RFC5737 TEST-NET-1 (documentation)       |
-| `198.51.100.0/24`  | RFC5737 TEST-NET-2 (documentation)       |
-| `203.0.113.0/24`   | RFC5737 TEST-NET-3 (documentation)       |
-| `198.18.0.0/15`    | RFC2544 benchmarking                     |
-| `fc00::/7`         | IPv6 unique local addresses (ULA)        |
-| `100.64.0.0/10`    | CGNAT                                    |
-| `0.0.0.0`, `255.255.255.255` | unspecified / broadcast        |
-| Any hostname requiring DNS | unresolvable → rejected as not-local |
+Every retrieved result preserves metadata such as:
 
-See `backend/tests/test_netguard.py` (28 tests, parametrized) for the
-exhaustive block-list coverage and
-`backend/app/security/network_monitor.py` for the parallel
-event-stream monitor that surfaces blocks to the UI.
+- asset tag
+- document type
+- source file
+- data origin
+- chunk ID
+- section
+- retrieval mode
 
-The coder agent's child-Python sandbox
-(`backend/agent/coder/sandbox.py`) is stricter still: it only allows
-`ip.is_loopback` for outbound sockets, blocks `subprocess` /
-`os.system` / network imports via a PEP 451 import hook, and runs
-each request in a wall-clock-bounded subprocess.
+If the local embedding model is unavailable, the retriever can degrade honestly to `bm25_only`; it does not pretend lexical-only retrieval is full hybrid retrieval.
+
+### No active validated reranker
+
+A reranker is **not** part of the validated active retrieval path. Do not interpret stale registry/config placeholders as proof of active reranking.
+
+---
+
+## Industrial Agent Workflow
+
+The industrial workflow is intentionally separate from normal chat and normal RAG QA.
+
+A request with clear multi-step industrial decision intent can execute:
+
+```text
+Request
+  ↓
+Asset Identity
+  ↓
+Hybrid Retrieval
+  ↓
+Evidence Analysis
+  ↓
+Local Calculations / Tools
+  ↓
+Decision Synthesis
+  ↓
+Draft Artifact
+  ↓
+Human Review Required
+```
+
+### Flagship R-1001 workflow
+
+Committed historical flagship evidence records:
+
+- Asset: `R-1001`
+- Asset identity: `VERIFIED`
+- Retrieval mode: `hybrid`
+- Retrieved chunks: `36`
+- Source files: `7`
+- Threshold-breach analysis: performed
+- Inspection evidence: included
+- Vendor evidence: included
+- SOP evidence: included
+- Sandbox calculation: used
+- Human approval required: `true`
+- Draft DOCX artifact: created
+- Artifact verification: passed
+- External calls recorded: `0`
+- Flagship validation: `14/14`
+
+This is committed historical validation evidence and should not be confused with a live run performed at README render time.
+
+---
+
+## Governance and Human Authorization
+
+Sovereign AI separates the AI recommendation from the human decision.
+
+Persistent approval records support:
+
+```text
+PENDING → APPROVED
+PENDING → REJECTED
+```
+
+Terminal decisions do not transition back to `PENDING`.
+
+Before a terminal decision is accepted, the stored artifact SHA-256 is checked against the current artifact. A mismatch blocks the transition.
+
+### API
+
+```text
+GET  /api/approvals/pending
+GET  /api/approvals/{run_id}
+POST /api/approvals/{run_id}/approve
+POST /api/approvals/{run_id}/reject
+```
+
+### Important governance semantics
+
+- Reviewer IDs are currently self-asserted strings.
+- `reviewer_identity_verified` is not an external identity proof.
+- Human approval does **not** rewrite the generated DOCX into a falsely “final” document.
+- The artifact remains a DRAFT recommendation; approval/rejection metadata is stored separately as governance evidence.
+
+---
+
+## Sovereignty Receipt
+
+A terminal human decision creates a **Sovereignty Receipt** in the same governance transaction.
+
+A receipt binds evidence such as:
+
+- run ID
+- asset identity
+- AI recommendation metadata
+- human decision
+- artifact SHA-256
+- retrieval evidence summary
+- routing information
+- explicit model-execution evidence when available
+- network/external-call evidence
+- sovereignty metadata
+
+Receipt payloads are canonicalized and hashed with SHA-256.
+
+### API
+
+```text
+GET /api/receipts/{run_id}
+GET /api/receipts/{run_id}/verify
+```
+
+Pending approvals do not have terminal receipts.
+
+---
+
+## Tamper-Evident Receipt Chain
+
+Terminal receipts are appended to a local SHA-256-linked history.
+
+Each chain entry binds:
+
+- sequence number
+- run ID
+- receipt ID
+- receipt SHA-256
+- approval status
+- timestamp
+- previous chain hash
+- current chain hash
+
+The chain can detect broken links, altered receipt bindings, invalid self-hashes, missing entries, sequence gaps, and unlinked receipts.
+
+### API
+
+```text
+GET /api/receipt-chain
+GET /api/receipt-chain/head
+GET /api/receipt-chain/verify
+GET /api/receipt-chain/{run_id}
+```
+
+The chain is **tamper-evident**, not tamper-proof. An unrestricted administrator with full database write access could rewrite local history; an external trust anchor or digital signature would be required for stronger guarantees.
+
+---
+
+## Judge Mode
+
+Judge Mode is a read-only evidence surface designed to show what is live, what is persistent, what is historical, and what is unavailable.
+
+It separates evidence into explicit source types:
+
+- `LIVE`
+- `LIVE_PERSISTENT`
+- `COMMITTED_HISTORICAL_EVIDENCE`
+- `FROZEN_EVALUATION_SNAPSHOT`
+- `UNAVAILABLE`
+
+Judge Mode shows:
+
+- live model/runtime health
+- GPU state
+- embedded Qdrant / BM25 state
+- current external-call counters
+- pending human reviews
+- terminal decisions
+- receipt verification
+- receipt-chain verification
+- routing vs actual model execution
+- historical flagship evidence
+- frozen benchmark evidence
+- explicit claim boundaries
+
+### API
+
+```text
+GET /api/judge/overview
+GET /api/judge/runs/{run_id}
+GET /api/judge/flagship
+GET /api/judge/evaluation
+```
+
+Judge Mode contains no approval/rejection mutation endpoints.
+
+---
+
+## Security Boundary
+
+### NetworkGuard
+
+`backend/agent/security/netguard.py` enforces the application-level network boundary used by agent execution.
+
+Allowed destinations are limited to:
+
+- loopback: `127.0.0.0/8`, `::1`
+- RFC1918 private networks:
+  - `10.0.0.0/8`
+  - `172.16.0.0/12`
+  - `192.168.0.0/16`
+
+External and special-use destinations are blocked, including cloud-metadata/link-local ranges and hostnames that would require external DNS resolution.
+
+### No cloud fallback
+
+If a required local model runtime is unavailable, the execution path returns an honest unavailable/failure state. It does not silently call a cloud model.
+
+### What `0 external calls` means
+
+When a validated workflow reports `external_calls = 0`, it means the application-level guarded workflow recorded no external network calls during that run. It is not a certification that the entire operating system or physical machine was air-gapped.
+
+---
+
+## Measured Evidence
+
+### Frozen RAG benchmark
+
+A committed frozen evaluation snapshot records:
+
+| Metric | Result |
+|---|---:|
+| Hit@1 | `2/6` |
+| Hit@3 | `4/6` |
+| Hit@5 | `6/6` |
+| MRR | `0.5556` |
+| Primary-source@1 | `2/6` |
+| Foreign asset hits | `0` |
+
+Interpretation: the benchmark recovered the expected primary evidence for all six benchmark questions within the top five, with complete provenance and zero foreign-asset retrieval; first-rank quality remains an improvement area.
+
+### Other frozen evaluation evidence
+
+| Category | Result |
+|---|---:|
+| Industrial Golden | `10/10` |
+| Asset Identity | `18/18` |
+| Routing | `10/10` |
+| Runtime Resilience | `14/14` |
+| Sovereignty / Security | `12/12` |
+| Artifact / Sandbox | `11/11` |
+| Flagship Validation | `14/14` |
+
+These categories are **not** summed into an invented overall score.
+
+### Latest product-freeze validation
+
+The final Workbench/product acceptance reported:
+
+| Validation | Result |
+|---|---:|
+| Phase 18 routing / execution tests | `21 passed, 0 failed` |
+| Flagship regression | `25 passed, 0 failed` |
+| Governance + Judge focused regression | `202 passed, 0 failed` |
+| Frontend unit tests | `74 passed, 0 failed` |
+| TypeScript | PASS |
+| ESLint | PASS |
+| Vite build | PASS |
 
 ---
 
 ## Ports
 
-| Service          | Default port | Bound to           |
-|------------------|--------------|--------------------|
-| Backend (FastAPI)| `8000`       | `0.0.0.0`          |
-| General LLM      | `8001`       | loopback (`8001` is reserved for the not-yet-deployed general model) |
-| Coder LLM        | `8002`       | loopback           |
-| Vision LLM       | `8003`       | loopback           |
-| Frontend (Vite)  | `3000`       | loopback           |
-| Qdrant (HTTP/gRPC)| `6333`/`6334` | container         |
-| PostgreSQL       | `5432`       | container          |
-| Piston (sandbox) | `2000`       | container          |
+| Service | Port | Purpose |
+|---|---:|---|
+| Frontend | `3000` | React/Vite Workbench |
+| Backend | `8000` | FastAPI API |
+| General model | `8001` | Qwen2.5-3B-Instruct |
+| Coder model | `8002` | Qwen2.5-Coder-3B-Instruct |
+| Vision model | `8003` | Qwen2.5-VL-3B-Instruct |
+| Optional Qdrant server | `6333` / `6334` | server-mode API; authoritative agent RAG uses embedded Qdrant |
+| Optional PostgreSQL | `5432` | optional relational service |
+| Optional Piston | `2000` | optional sandbox adapter |
 
-The model servers are loopback-only; the backend reaches them at
-`http://localhost:800{1,2,3}/v1`. In a containerised deploy these map
-to the in-network service names defined in `infra/docker-compose*.yml`.
+For local competition/demo operation, model servers should bind to loopback (`127.0.0.1`).
 
 ---
 
-## Quick start
+## Quick Start
 
-### With GPU (CUDA) — recommended on RTX 4050
+### 1. Activate the validated environment
 
-The CUDA build of llama-cpp-python is installed in the
-`sovereign-ai` conda environment (Phase 11.4). Start the model
-servers on bare metal, then the backend:
+```powershell
+conda activate sovereign-ai
+python --version
+where.exe python
+```
 
-```bash
-# Terminal 1: coder (CUDA, ngl=40 validated)
-python scripts/serve_model.py --model-id qwen-coder \
-    --model-path models/qwen-coder/qwen2.5-coder-3b-instruct-q4_k_m.gguf \
-    --port 8002 --n-gpu-layers 40 --n-ctx 2048
+Validated Python version: **3.11.9**.
 
-# Terminal 2: vision (CUDA, ngl=99 validated)
-python scripts/serve_model.py --model-id qwen-vision \
-    --model-path models/qwen-vision/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf \
-    --mmproj models/qwen-vision/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf \
-    --chat-format qwen2-vl --port 8003 --n-gpu-layers 99 --n-ctx 2048
+### 2. Start the General model
 
-# Terminal 3: backend
-cd backend
-PYTHONPATH=. uvicorn app.main:app --reload --port 8000
+```powershell
+cd D:\Sovereign_AI
+$env:PYTHONPATH = "D:\Sovereign_AI"
 
-# Terminal 4: frontend
-cd frontend
+python scripts/serve_model.py `
+  --model-id general `
+  --model-path models/qwen-general/qwen2.5-3b-instruct-q4_k_m.gguf `
+  --host 127.0.0.1 `
+  --port 8001 `
+  --n-gpu-layers 40 `
+  --n-ctx 2048
+```
+
+### 3. Start the Coder model
+
+```powershell
+conda activate sovereign-ai
+cd D:\Sovereign_AI
+$env:PYTHONPATH = "D:\Sovereign_AI"
+
+python scripts/serve_model.py `
+  --model-id qwen-coder `
+  --model-path models/qwen-coder/qwen2.5-coder-3b-instruct-q4_k_m.gguf `
+  --host 127.0.0.1 `
+  --port 8002 `
+  --n-gpu-layers 40 `
+  --n-ctx 2048
+```
+
+### 4. Start the Vision model
+
+```powershell
+conda activate sovereign-ai
+cd D:\Sovereign_AI
+$env:PYTHONPATH = "D:\Sovereign_AI"
+
+python scripts/serve_model.py `
+  --model-id qwen-vision `
+  --model-path models/qwen-vision/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf `
+  --mmproj models/qwen-vision/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf `
+  --chat-format qwen2-vl `
+  --host 127.0.0.1 `
+  --port 8003 `
+  --n-gpu-layers 99 `
+  --n-ctx 2048
+```
+
+> On a 6 GB GPU, keep an eye on VRAM. GPU admission serializes inference work, but model residency still consumes memory.
+
+### 5. Start the backend
+
+```powershell
+conda activate sovereign-ai
+cd D:\Sovereign_AI
+$env:PYTHONPATH = "D:\Sovereign_AI\backend;D:\Sovereign_AI"
+
+python -m uvicorn --app-dir backend app.main:app `
+  --host 127.0.0.1 `
+  --port 8000
+```
+
+API documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### 6. Start the frontend
+
+```powershell
+cd D:\Sovereign_AI\frontend
 npm install
 npm run dev
 ```
 
-If `qwen-vision` weights are not present, the vision server will fail
-to start and `/api/vision/analyze` will return 503; the frontend
-renders a "VISION ANALYSIS UNAVAILABLE" panel for the user.
+Open:
 
-### Containerised (Docker Compose)
-
-```bash
-cd infra
-docker-compose -f docker-compose.yml --profile gpu up -d   # with GPU services
-docker-compose -f docker-compose.cpu.yml up -d             # CPU only
+```text
+http://127.0.0.1:3000/workbench
+http://127.0.0.1:3000/judge
+http://127.0.0.1:3000/system
 ```
 
-The compose `gpu` profile launches the three llama.cpp server
-containers. The `cpu` profile assumes bare-metal `serve_model.py`
-processes for the local model servers.
+### 7. Verify model services
 
-### Ingestion subsystem (Phase 1 + 1.5)
-
-```bash
-cd backend/ingestion
-uv run python -m app.main serve      # serves the FastAPI ingestion service + static frontend
-uv run python -m app.main ingest --project <path>
+```powershell
+irm http://127.0.0.1:8001/v1/models
+irm http://127.0.0.1:8002/v1/models
+irm http://127.0.0.1:8003/v1/models
 ```
 
-See `backend/ingestion/README.md` for the full pipeline.
+The System page probes live runtime state. Do not treat registry configuration alone as proof that a model is online.
 
 ---
 
-## Project layout
+## Demo Queries
 
+### General QA
+
+```text
+What is the difference between preventive and corrective maintenance?
 ```
+
+Expected path:
+
+```text
+GENERAL_QA → General model → no RAG
+```
+
+### Grounded RAG
+
+```text
+Give me information about the inspection report for R-1001.
+```
+
+Expected path:
+
+```text
+RAG_QA → Qdrant + BM25 → General synthesis → evidence displayed
+```
+
+### Cross-document RAG
+
+```text
+Compare the inspection findings with the vendor recommendations for R-1001.
+```
+
+### Industrial workflow
+
+```text
+Analyze R-1001 operating data and inspection findings, compare them with the
+ equipment manual, maintenance SOP and vendor recommendations, determine the
+ required corrective action, and prepare a maintenance approval note.
+```
+
+Expected path:
+
+```text
+Industrial LangGraph workflow
+→ asset identity
+→ hybrid retrieval
+→ calculations/tools
+→ governed recommendation
+→ draft artifact
+→ human review
+```
+
+### Coding
+
+```text
+Write a Python function to calculate Reynolds number and include a simple test.
+```
+
+### Vision
+
+Attach a P&ID image and ask:
+
+```text
+Identify the equipment and instrument tags visible in this drawing. Do not guess unreadable tags.
+```
+
+---
+
+## Project Layout
+
+```text
 Sovereign_AI/
-├── README.md                 # this file
-├── Better_plan.md            # full architecture spec + current status table
-├── Better_plan.pdf           # architecture spec (PDF)
-├── Problem_Statemen.md       # problem statement
-├── final_frontend_gpt.md     # frontend design notes
+├── README.md
+├── Better_plan.md
+├── Problem_Statemen.md
 │
-├── backend/                  # FastAPI + LangGraph application
-│   ├── app/                  # production FastAPI package (routes, RAG, models, security)
-│   ├── agent/                # standalone maintenance agent (LangGraph) + coder subpackage
-│   │   └── security/         # NetworkGuard
-│   ├── rag/                  # standalone RAG package (Qdrant + bm25s)
-│   ├── ingestion/            # Phase 1 + 1.5 ingestion subsystem
-│   ├── tests/                # pytest suite (~120 tests)
-│   └── scripts/              # internal E2E helpers
+├── backend/
+│   ├── app/
+│   │   ├── api/                 # FastAPI routes
+│   │   ├── models/              # registry, routing, local model client
+│   │   └── storage/
+│   ├── agent/                   # LangGraph industrial agent + tools/security
+│   ├── governance/              # approvals, receipts, receipt chain
+│   ├── judge/                   # Judge Mode aggregation
+│   ├── rag/                     # embedded Qdrant + BM25 hybrid retrieval
+│   ├── ingestion/               # ingestion subsystem
+│   └── tests/
 │
-├── frontend/                 # React + Vite + Tailwind SPA
+├── frontend/
 │   └── src/
-│       ├── pages/            # Workbench, NetworkMonitor, VisionResult, …
-│       ├── lib/api/          # typed Axios client (control + inference timeouts)
-│       └── lib/utils.ts      # isVisionUnavailable() honest disclosure helper
+│       ├── pages/               # Workbench, Judge Mode, System, etc.
+│       ├── components/
+│       └── lib/                 # typed API client + state
 │
-├── infra/                    # Docker Compose + .env.example
+├── scripts/
+│   ├── serve_model.py           # local OpenAI-compatible GGUF server
+│   └── gpu_admission.py         # cross-process GPU admission control
 │
-├── scripts/                  # local model launcher + demo scripts
-│   └── serve_model.py        # llama-cpp-python FastAPI wrapper
-│
-├── models/                   # local GGUF weights (gitignored)
-│   ├── qwen-coder/           # Qwen2.5-Coder-3B-Instruct Q4_K_M
-│   └── qwen-vision/          # Qwen2.5-VL-3B-Instruct + mmproj
+├── models/                      # gitignored local weights
+│   ├── qwen-general/
+│   ├── qwen-coder/
+│   ├── qwen-vision/
+│   └── embeddings/
 │
 ├── data/
-│   ├── rag/                  # Qdrant (393 chunks) + BM25 index
-│   ├── pid_analysis/         # P&ID analysis outputs
-│   └── synthetic/            # synthetic plant dataset
+│   ├── rag/                     # embedded Qdrant + BM25 data
+│   ├── governance/              # persistent approval / receipt DB
+│   ├── outputs/                 # generated artifacts
+│   └── synthetic/               # industrial demo corpus
 │
-├── demo-data/                # demo documents for ingestion
-├── uploads/                  # runtime uploads
-├── PID_Dataset/              # P&ID image classification dataset
-├── prerequistes/             # per-component setup notes
-├── reports/                  # per-phase validation write-ups
-└── _rollback/                # Phase 11.4 CUDA build artifacts + CPU fallback wheel
+├── reports/                     # committed validation evidence
+├── demo-data/
+├── uploads/
+├── PID_Dataset/
+├── prerequistes/
+└── infra/
 ```
 
 ---
 
 ## Testing
 
-```bash
-# Backend integration tests (app + agent)
-cd backend
-pytest tests/ -v
+Always use the validated Conda environment for backend/project commands:
 
-# RAG-specific tests
-cd backend
-pytest rag/tests/ -v
-
-# Ingestion subsystem tests
-cd backend/ingestion
-pytest tests/ -v
-
-# Frontend unit tests
-cd frontend
-npm test
-
-# Lint & type check
-cd backend
-ruff check .
-mypy app/
+```powershell
+conda activate sovereign-ai
 ```
 
-The backend test suite covers NetworkGuard (28 parametrized cases
-including link-local, RFC5737, RFC2544, IPv6 link-local, IPv6 ULA,
-cloud-metadata, and hostname-lookalike rejection), the router
-(16 cases), the coder sandbox (29 cases), vision honesty (10 cases),
-Piston boundary enforcement (10 cases), and the Phase 10.4
-inference-reliability regressions (12 cases).
+### Product routing / execution
+
+```powershell
+cd D:\Sovereign_AI\backend
+$env:PYTHONPATH = "D:\Sovereign_AI\backend;D:\Sovereign_AI"
+pytest -q tests/test_phase18_workbench_routing.py
+```
+
+### Flagship regression
+
+```powershell
+pytest -q tests/test_phase14b_flagship_workflow.py
+```
+
+### Governance and Judge Mode
+
+```powershell
+pytest -q `
+  tests/test_phase16a_judge_mode_api.py `
+  tests/test_phase15c_receipt_hash_chain.py `
+  tests/test_phase15b_sovereignty_receipt.py `
+  tests/test_phase15a_human_approval.py
+```
+
+### Frontend
+
+```powershell
+cd D:\Sovereign_AI\frontend
+npm test
+npx tsc --noEmit
+npm run lint
+npm run build
+```
+
+### Embedded Qdrant test note
+
+The authoritative RAG store is embedded on disk. Do not run a test process against the same embedded Qdrant database while another backend process is actively holding it; stop the live backend first if a test reports a Qdrant lock conflict.
 
 ---
 
-## Known limitations
+## Known Limitations
 
-- **General LLM weights are not provisioned.** The endpoint, registry
-  entry, router path, and `/api/system/status` are all in place; a
-  small Qwen 2.5 3B Instruct GGUF still needs to be downloaded into
-  `models/qwen-general/`.
-- **Vision CUDA is VRAM-constrained.** Validated for the tested workload
-  (Qwen2.5-VL-3B-Instruct Q4_K_M, peak ~5 832 MiB on RTX 4050). Monitor
-  VRAM under production workloads; arbitrary high-resolution workloads
-  have not been tested.
-- **GPU concurrency is conditional.** Concurrent multi-model GPU
-  inference was tested with peak VRAM 5 699–5 771 MiB (under the
-  5 800 MiB safety limit). Production concurrency should be monitored
-  and is not guaranteed under arbitrary workloads.
-- **PaddleOCR is in a separate environment.** The Qdrant client pins
-  `protobuf<6`, which conflicts with `paddlepaddle>=2.5`. PaddleOCR
-  is installed and exercised in its own environment per
-  `prerequistes/PaddleOCR.md`; it is not imported in the
-  `backend/app` path. The full multimodal pipeline is exercised in
-  Phase 9+ via the local VLM.
-- **Single-host only.** The compose stack assumes one host per
-  deployment; the router does not fan out across nodes.
+- The industrial demo corpus is centered primarily on the `R-1001` scenario.
+- The flagship P&ID workflow validates one industrial scenario, not every possible engineering drawing.
+- Small/dense P&ID labels can still challenge the 3B vision model.
+- The active RAG pipeline has no validated reranker; first-rank retrieval quality can improve even though the frozen benchmark recovered all expected primary evidence within top five.
+- The current deployment is single-host.
+- SQLite governance is local single-host persistence, not a distributed trust system.
+- Reviewer identity is self-asserted and not authenticated by an identity provider.
+- There is no RBAC layer in the current competition build.
+- There is no digital signature or external trust anchor for receipts.
+- The receipt chain is tamper-evident, not tamper-proof against an administrator with unrestricted database write access.
+- Application-level network controls are validated; whole-machine isolation depends on the deployment environment.
+- GPU VRAM is constrained on the validated RTX 4050 host. Three services can be exposed, but arbitrary simultaneous heavy inference is not guaranteed.
+- Model weights are not stored in Git and must be provisioned separately.
 
 ---
 
-## Roadmap
+## What We Do Not Claim
 
-| Area                   | Current state                            | Next                                              |
-|------------------------|------------------------------------------|---------------------------------------------------|
-| Backend API            | FastAPI + LangGraph, all routes live     | Maintain                                          |
-| RAG (Qdrant + BM25)    | 393 chunks, weighted hybrid, citations   | Re-rank tuning                                    |
-| NetworkGuard           | explicit trusted-local CIDRs            | Maintain                                          |
-| Coder (Qwen2.5-Coder)  | CPU + CUDA on RTX 4050 validated         | (optional) larger coder / context experiments     |
-| Vision (Qwen2.5-VL)    | **CPU + CUDA on RTX 4050 validated**     | Monitor VRAM under production workloads           |
-| General LLM            | router + endpoint reserved, weights absent | **Provision Qwen 2.5 3B Instruct GGUF**         |
-| GPU concurrency        | conditional (tested peak 5 699–5 771 MiB) | Monitor under production workloads                |
-| E2E harness            | per-phase suites + agent E2E             | Expand vision CUDA E2E once vision-GPU validated  |
-| 4 golden demos         | inspection-approval, data-analysis, multimodal, correspondence-search | Re-run all 4 against the CUDA coder |
+To keep the project evidence-based, Sovereign AI does **not** claim:
 
-Longer-term: rotate the model set, evaluate a reranker swap,
-and consider Windows Long Path support for in-place CUDA rebuilds.
+- whole-machine certified air gap
+- blockchain
+- tamper-proof storage
+- non-repudiation
+- digital signatures
+- externally anchored receipts
+- authenticated reviewer identity
+- active production reranking
+- perfect RAG ranking
+- that routing alone proves model execution
+- that historical benchmark evidence is the same thing as live runtime state
 
 ---
 
-## See also
+## Competition Evidence Files
 
-- `Better_plan.md` — full architecture specification with the current
-  status table for every roadmap item (COMPLETED / IN PROGRESS /
-  NEXT / BLOCKED / DEFERRED / OBSOLETE).
-- `reports/` — per-phase validation write-ups
-  (Phases 5–8, plus the Phase 11.4 CUDA build report).
-- `prerequistes/` — per-component setup and reference notes.
-- `_rollback/llama_cpp_python-0.3.35-cpu-py3-none-win_amd64.whl` —
-  known-good CPU fallback wheel if the CUDA build ever needs to be
-  reverted.
+Useful committed evidence lives under `reports/`, including:
+
+- `reports/flagship_workflow_latest.json`
+- `reports/competition_scorecard.json`
+- `reports/competition_scorecard.md`
+- submission claim-ledger / claim-risk reports when present
+
+Judge Mode reads committed historical/frozen evidence separately from live runtime and persistent governance state.
+
+---
+
+## License and Model Weights
+
+This repository contains project code and validation artifacts. Model weights are stored separately and remain subject to the licenses of their upstream model repositories.
+
+Before redistributing a packaged build, verify the licenses for every included model and third-party dependency.
+
+---
+
+## Closing
+
+**Sovereign AI turns confidential industrial evidence into locally generated, provenance-aware, human-governed decisions.**
+
+It does not only present an answer; it is designed to show the asset identity, retrieval evidence, local execution path, tools, human decision, artifact hash, network boundary, receipt, and chain evidence behind that answer.

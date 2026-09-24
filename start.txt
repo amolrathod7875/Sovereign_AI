@@ -23,9 +23,7 @@ Terminal 4 — General
  
 conda activate sovereign-ai
 cd D:\Sovereign_AI
-
 $env:PYTHONPATH = "D:\Sovereign_AI"
-
 python scripts/serve_model.py `
   --model-id general `
   --model-path models/qwen-general/qwen2.5-3b-instruct-q4_k_m.gguf `
