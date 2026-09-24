@@ -32,6 +32,7 @@ import type {
   JudgeRunDetail,
   JudgeFlagshipEvidence,
   JudgeEvaluationEvidence,
+  GeneralRunResponse,
 } from './types'
 
 const BASE_URL =
@@ -204,6 +205,22 @@ export async function searchRag(req: {
 }
 
 // ---------------------------------------------------------------------------
+// General / Knowledge
+// ---------------------------------------------------------------------------
+export async function runGeneral(req: {
+  task: string
+  asset_tag?: string | null
+  use_rag?: boolean
+}): Promise<GeneralRunResponse> {
+  const { data } = await inference.post<GeneralRunResponse>('/general/run', {
+    task: req.task,
+    asset_tag: req.asset_tag ?? null,
+    use_rag: req.use_rag ?? false,
+  })
+  return data
+}
+
+// ---------------------------------------------------------------------------
 // Artifacts (read-only — generation happens in the backend)
 // ---------------------------------------------------------------------------
 export async function listArtifacts(opts?: {
@@ -319,6 +336,7 @@ export const apiClient = {
   getJudgeRun,
   getJudgeFlagship,
   getJudgeEvaluation,
+  runGeneral,
 }
 
 export default apiClient

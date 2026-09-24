@@ -21,6 +21,7 @@ from app.api import (
     receipts,
     receipt_chain,
     judge,
+    general,
 )
 from app.storage.postgres import init_db
 from app.storage.qdrant import init_qdrant
@@ -78,6 +79,7 @@ app.include_router(approvals.router, prefix="/api/approvals", tags=["approvals"]
 app.include_router(receipts.router, prefix="/api/receipts", tags=["receipts"])
 app.include_router(receipt_chain.router, prefix="/api/receipt-chain", tags=["receipt-chain"])
 app.include_router(judge.router, prefix="/api/judge", tags=["judge"])
+app.include_router(general.router, prefix="/api/general", tags=["general"])
 
 
 @app.get("/")

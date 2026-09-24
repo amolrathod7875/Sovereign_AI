@@ -309,6 +309,29 @@ export interface RunSummary {
   task_type: string | null
 }
 
+/** backend/app/api/general.py :: GeneralRunResponse */
+export interface GeneralRunResponse {
+  status: string
+  answer: string | null
+  routing: Record<string, unknown>
+  rag_used: boolean
+  evidence: Array<{
+    claim: string | null
+    source: string | null
+    document_type: string | null
+    confidence: number | null
+    text?: string | null
+    asset_tag?: string | null
+    chunk_id?: string | null
+    section?: string | null
+    retrieval_mode?: string | null
+  }>
+  actual_model_execution: string[]
+  external_calls: number
+  errors: string[]
+  message?: string | null
+}
+
 // ---------------------------------------------------------------------------
 // Judge Mode — Phase 16A backend/judge/service.py + backend/app/api/judge.py
 // ---------------------------------------------------------------------------

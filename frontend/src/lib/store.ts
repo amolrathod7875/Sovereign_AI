@@ -19,7 +19,11 @@ interface SystemStore {
 function modelAvailability(models: ModelInfo[]): { available: number; total: number } {
   const total = models.filter((m) => m.id !== 'embedding' && m.id !== 'reranker').length || 1
   const available = models.filter(
-    (m) => m.id !== 'embedding' && m.id !== 'reranker' && (m.status === 'online' || m.status === 'active'),
+    (m) => {
+      if (m.id === 'embedding' || m.id === 'reranker') return false
+      const s = (m.status || '').toLowerCase()
+      return s === 'online' || s === 'active'
+    },
   ).length
   return { available, total }
 }

@@ -26,8 +26,9 @@ type TaskMode = 'auto' | 'coding' | 'vision' | 'knowledge'
 
 interface ExecutionMeta {
   task: string
-  model: string
-  rag: boolean | null
+  routing: string | null
+  actualModel: string
+  rag: boolean | null | string
   tools: string | null
   local: boolean
   externalCalls: number
@@ -129,12 +130,17 @@ export default function Workbench() {
       } else if (effectiveMode === 'vision') {
         assistant = await runVision()
       } else {
-        // In Auto mode, route text tasks so a coding prompt actually reaches the
-        // local coder rather than the maintenance agent.
         if (mode === 'auto' && !file) {
           const d = await apiClient.routeTask({ task: input.trim() })
-          if (d.selected_model === 'qwen-coder') {
+          const taskType = d.task_type || ''
+          if (taskType === 'CODING') {
             assistant = await runCoding(input.trim())
+          } else if (taskType === 'DOCUMENT_ANALYSIS' && d.selected_model === 'vision') {
+            assistant = await runVision()
+          } else if (taskType === 'GENERAL_QA') {
+            assistant = await runGeneral(input.trim())
+          } else if (taskType === 'RAG_QA') {
+            assistant = await runGeneral(input.trim(), true)
           } else {
             assistant = await runAgentTask(input.trim())
           }
@@ -165,6 +171,7 @@ export default function Workbench() {
     const res = await apiClient.runCoder(task)
     const routing: RoutingDecision | null = res.routing
     const artifacts = await resolveArtifacts(res.files)
+    const routingModel = modelDisplayName(routing?.selected_model ?? 'qwen-coder')
     return {
       id: `a-${Date.now()}`,
       role: 'assistant',
@@ -177,7 +184,8 @@ export default function Workbench() {
       mode: 'coding',
       execution: {
         task: 'Coding',
-        model: modelDisplayName(routing?.selected_model ?? 'qwen-coder'),
+        routing: routingModel,
+        actualModel: routingModel,
         rag: false,
         tools: 'Sandbox',
         local: routing?.all_local ?? true,
@@ -205,7 +213,8 @@ export default function Workbench() {
       mode: 'vision',
       execution: {
         task: visionType === 'pid' ? 'Vision Analysis (P&ID)' : 'Vision Analysis',
-        model: res.model,
+        routing: res.model,
+        actualModel: res.model,
         rag: false,
         tools: null,
         local: true,
@@ -217,10 +226,42 @@ export default function Workbench() {
     }
   }
 
+  async function runGeneral(task: string, useRag = false): Promise<ChatMessage> {
+    const res = await apiClient.runGeneral({ task, asset_tag: assetTag, use_rag: useRag })
+    const taskLabel = res.routing?.task_type
+      ? String(res.routing.task_type).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+      : 'General'
+    const routingModel = (res.routing?.selected_model as string | undefined) || 'general'
+    const actualModel = res.actual_model_execution?.length
+      ? res.actual_model_execution.join(', ')
+      : 'NONE'
+    return {
+      id: `a-${Date.now()}`,
+      role: 'assistant',
+      content: res.answer || res.message || 'General task complete.',
+      mode: 'knowledge',
+      execution: {
+        task: taskLabel,
+        routing: modelDisplayName(routingModel),
+        actualModel,
+        rag: res.rag_used ? 'Enabled' : 'Not used',
+        tools: null,
+        local: res.actual_model_execution.length > 0,
+        externalCalls: res.external_calls,
+      },
+      evidence: res.evidence?.map((e) => ({
+        claim: e.claim,
+        source: e.source,
+        document_type: e.document_type,
+        confidence: e.confidence,
+      })) || [],
+      errors: res.errors,
+      externalCalls: res.external_calls,
+    }
+  }
+
   async function runAgentTask(task: string): Promise<ChatMessage> {
     const hasImage = !!file
-    // If an image is attached, upload it first and hand the LOCAL path to the
-    // agent (the browser never sends the bytes anywhere but the local backend).
     let imagePath: string | null = null
     let analysisType = 'general'
     if (hasImage && file) {
@@ -244,6 +285,7 @@ export default function Workbench() {
       : hasImage
         ? 'Multimodal Analysis'
         : 'Knowledge'
+    const routingModel = modelDisplayName(routing?.selected_model)
     return {
       id: `a-${Date.now()}`,
       role: 'assistant',
@@ -251,7 +293,8 @@ export default function Workbench() {
       mode: hasImage ? 'vision' : 'knowledge',
       execution: {
         task: taskLabel,
-        model: modelDisplayName(routing?.selected_model),
+        routing: routingModel,
+        actualModel: 'Industrial LangGraph workflow',
         rag: routing?.requires_rag ?? null,
         tools: routing?.requires_tools ? 'Local tools' : null,
         local: routing?.all_local ?? true,
@@ -463,11 +506,19 @@ function MessageView({ message }: { message: ChatMessage }) {
 
 function ExecutionCard({ message }: { message: ChatMessage }) {
   const ex = message.execution!
+  const ragText = ex.rag == null
+    ? '—'
+    : typeof ex.rag === 'string'
+      ? ex.rag
+      : ex.rag
+        ? 'Enabled'
+        : 'Not used'
   return (
     <div className="rounded-lg border border-border bg-background-tertiary p-3 space-y-1.5">
       <Row icon={Cpu} label="Task" value={ex.task} />
-      <Row icon={Shield} label="Model" value={ex.model} />
-      <Row icon={Database} label="RAG" value={ex.rag == null ? '—' : ex.rag ? 'Enabled' : 'Not used'} />
+      <Row icon={Database} label="Routing" value={ex.routing ?? '—'} />
+      <Row icon={Cpu} label="Actual execution" value={ex.actualModel} />
+      <Row icon={Database} label="RAG" value={ragText} />
       <Row icon={Wrench} label="Tools" value={ex.tools ?? '—'} />
       <Row
         icon={Shield}

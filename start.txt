@@ -18,6 +18,23 @@ cd D:\Sovereign_AI
 $env:PYTHONPATH = "D:\Sovereign_AI"
 python scripts/serve_model.py --model-id qwen-vision --model-path models/qwen-vision/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf --mmproj models/qwen-vision/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf --chat-format qwen2-vl --port 8003 --n-gpu-layers 99 --n-ctx 2048
 
+
+Terminal 4 — General 
+ 
+conda activate sovereign-ai
+cd D:\Sovereign_AI
+
+$env:PYTHONPATH = "D:\Sovereign_AI"
+
+python scripts/serve_model.py `
+  --model-id general `
+  --model-path models/qwen-general/qwen2.5-3b-instruct-q4_k_m.gguf `
+  --host 127.0.0.1 `
+  --port 8001 `
+  --n-gpu-layers 40 `
+  --n-ctx 2048
+
+
 for checkup 
 irm http://localhost:8000/api/system/health
 irm http://localhost:8002/v1/models

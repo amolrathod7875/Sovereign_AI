@@ -64,15 +64,6 @@ def plan_for_request(request: str) -> list:
         if any(k in req for k in kws):
             selected.append({"category": category, "document_type": doc_type, "query": query})
 
-    # Always ensure the core evidence chain is present for a maintenance-approval task.
-    core = ["sensor_data", "equipment_manual", "operating_sop",
-            "preventive_maintenance_sop", "inspection_report", "vendor_correspondence",
-            "asset_profile"]
-    for c in core:
-        if not any(p["category"] == c for p in selected):
-            doc_type, query = EVIDENCE_CATALOGUE[c]
-            selected.append({"category": c, "document_type": doc_type, "query": query})
-
     # De-duplicate while preserving order.
     seen = set()
     ordered = []
