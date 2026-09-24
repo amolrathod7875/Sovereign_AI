@@ -16,7 +16,13 @@ interface SystemStore {
   startPolling: (_intervalMs?: number) => () => void
 }
 
-function modelAvailability(models: ModelInfo[]): { available: number; total: number } {
+function modelAvailability(models: ModelInfo[], components?: Array<{ id: string; status: string }>): { available: number; total: number } {
+  const modelIds = new Set(['qwen-coder', 'vision', 'general'])
+  if (components && components.length > 0) {
+    const total = 3
+    const available = components.filter((c) => modelIds.has(c.id) && c.status === 'ONLINE').length
+    return { available, total }
+  }
   const total = models.filter((m) => m.id !== 'embedding' && m.id !== 'reranker').length || 1
   const available = models.filter(
     (m) => {
@@ -28,8 +34,8 @@ function modelAvailability(models: ModelInfo[]): { available: number; total: num
   return { available, total }
 }
 
-export function summarizeModels(models: ModelInfo[]): { available: number; total: number } {
-  return modelAvailability(models)
+export function summarizeModels(models: ModelInfo[], components?: Array<{ id: string; status: string }>): { available: number; total: number } {
+  return modelAvailability(models, components)
 }
 
 export const useSystemStore = create<SystemStore>((set, get) => ({

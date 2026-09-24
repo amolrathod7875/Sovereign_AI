@@ -57,11 +57,36 @@ _CODE_NOUNS = [
     "program", "reynolds", "module", "unittest", "pytest", "decorator", "loop",
 ]
 _RAG_NOUNS = [
-    "manual", "sop", "maintenance", "procedure", "r-1001", "knowledge base",
+    "manual", "sop", "procedure", "r-1001", "knowledge base",
     "documents", "document", "specification", "datasheet", "standard", "guideline",
     "report", "correspondence", "approval", "operating", "pm ", "inspection",
     "requirement", "requirements",
 ]
+
+_INDUSTRIAL_ACTION_VERBS = [
+    "analyze", "assess", "determine", "prepare", "evaluate",
+    "decide", "approval", "corrective", "maintenance decision", "workflow",
+]
+_INDUSTRIAL_EVIDENCE_NOUNS = [
+    "operating data", "sensor", "inspection findings", "equipment manual",
+    "maintenance sop", "vendor recommendation", "vendor correspondence",
+    "asset profile", "threshold", "corrective action",
+]
+
+
+def is_industrial_workflow_request(task: str) -> bool:
+    """Heuristic predicate: does this request clearly intend the full industrial
+    maintenance workflow?
+
+    Requires a combination of asset/evidence intent AND decision/action intent.
+    A single keyword is NOT enough.
+    """
+    import re
+    text = (task or "").lower()
+    has_asset = any(re.search(r'\b' + re.escape(t) + r'\b', text) for t in ["r-1001", "asset", "equipment", "reactor"])
+    has_evidence = any(re.search(r'\b' + re.escape(t) + r'\b', text) for t in _INDUSTRIAL_EVIDENCE_NOUNS)
+    has_action = any(re.search(r'\b' + re.escape(t) + r'\b', text) for t in _INDUSTRIAL_ACTION_VERBS)
+    return bool(has_asset and (has_evidence or has_action))
 
 
 def classify_task(
@@ -82,9 +107,7 @@ def classify_task(
     take precedence.
     """
     text = (task or "").lower()
-    has_image_input = bool(has_image) or bool(image_path) or any(
-        t in text for t in _VISION_INPUT_TOKENS
-    )
+    has_image_input = bool(has_image) or bool(image_path)
 
     # Vision: need an image AND an analysis intent (or explicit override).
     vision_intent = any(v in text for v in _VISION_INTENT_VERBS)

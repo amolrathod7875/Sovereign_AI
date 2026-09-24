@@ -53,6 +53,14 @@ interface ChatMessage {
 
 const VISION_TYPES = ['pid', 'general', 'document', 'ocr', 'inspection']
 
+function isIndustrialWorkflowRequest(task: string): boolean {
+  const text = task.toLowerCase()
+  const hasAsset = /r-1001|asset|equipment|reactor/.test(text)
+  const hasEvidence = /operating data|sensor|inspection findings|equipment manual|maintenance sop|vendor recommendation|vendor correspondence|asset profile|threshold|corrective action/.test(text)
+  const hasAction = /analyze|assess|determine|prepare|recommend|evaluate|decide|approval|corrective|maintenance decision|workflow/.test(text)
+  return hasAsset && (hasEvidence || hasAction)
+}
+
 function resolveArtifacts(names: string[]) {
   if (!names.length) return Promise.resolve<ChatMessage['artifacts']>([])
   return apiClient.listArtifacts().then((infos) => {
@@ -129,6 +137,8 @@ export default function Workbench() {
         assistant = await runCoding(input.trim())
       } else if (effectiveMode === 'vision') {
         assistant = await runVision()
+      } else if (mode === 'knowledge') {
+        assistant = await runGeneral(input.trim(), true)
       } else {
         if (mode === 'auto' && !file) {
           const d = await apiClient.routeTask({ task: input.trim() })
@@ -138,11 +148,13 @@ export default function Workbench() {
           } else if (taskType === 'DOCUMENT_ANALYSIS' && d.selected_model === 'vision') {
             assistant = await runVision()
           } else if (taskType === 'GENERAL_QA') {
-            assistant = await runGeneral(input.trim())
+            assistant = await runGeneral(input.trim(), false)
           } else if (taskType === 'RAG_QA') {
             assistant = await runGeneral(input.trim(), true)
-          } else {
+          } else if (isIndustrialWorkflowRequest(input.trim())) {
             assistant = await runAgentTask(input.trim())
+          } else {
+            assistant = await runGeneral(input.trim(), false)
           }
         } else {
           assistant = await runAgentTask(input.trim())

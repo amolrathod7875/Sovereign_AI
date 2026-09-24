@@ -39,7 +39,7 @@ export default function Layout() {
     return stop
   }, [startPolling])
 
-  const modelSummary = summarizeModels(models)
+  const modelSummary = summarizeModels(models, status?.components)
   // Real external-call count from the backend probe (never asserted as 0).
   const externalCalls = status?.external_api_calls ?? 0
   const backendUp = !error && status !== null

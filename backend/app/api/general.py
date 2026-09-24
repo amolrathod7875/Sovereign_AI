@@ -41,7 +41,7 @@ class GeneralRunResponse(BaseModel):
     message: Optional[str] = None
 
 
-def _try_general_synthesis(task: str, evidence: List[Dict[str, Any]], max_tokens: int = 1024) -> Dict[str, Any]:
+async def _try_general_synthesis(task: str, evidence: List[Dict[str, Any]], max_tokens: int = 1024, use_rag: bool = False) -> Dict[str, Any]:
     """Attempt local general synthesis. Never raises."""
     m = get_model("general")
     if not m:
@@ -57,18 +57,38 @@ def _try_general_synthesis(task: str, evidence: List[Dict[str, Any]], max_tokens
         ok = False
     if not ok:
         return {"used": False, "reason": "general model server not running on this host", "rag_evidence_count": len(evidence)}
+    client = None
     try:
         from app.models.client import ModelClient
-        ctx = "\n".join(f"- {e.get('text', '')}" for e in evidence[:4]) or "(no retrieved evidence)"
+        if use_rag:
+            system = (
+                "You are Sovereign AI. Answer using ONLY the supplied local evidence. "
+                "If the evidence does not answer the question, state that clearly."
+            )
+            ctx = "\n".join(f"- {e.get('text', '')}" for e in evidence[:4]) or "(no retrieved evidence)"
+            user = f"Task: {task}\n\nLocal evidence:\n{ctx}"
+        else:
+            system = (
+                "You are Sovereign AI, a local on-premise assistant. "
+                "Answer the user's question clearly and accurately. "
+                "Do not claim access to evidence that was not provided."
+            )
+            user = task
         messages = [
-            {"role": "system", "content": "You are Sovereign AI. Answer using ONLY the provided local evidence. If the evidence does not answer the question, state that clearly."},
-            {"role": "user", "content": f"Task: {task}\n\nLocal evidence:\n{ctx}"},
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
         ]
         client = ModelClient("general", endpoint)
-        answer = client.generate(messages, max_tokens=max_tokens)
+        answer = await client.generate(messages, max_tokens=max_tokens)
         return {"used": True, "answer": answer}
     except Exception as e:
         return {"used": False, "reason": f"general synthesis failed: {e}", "rag_evidence_count": len(evidence)}
+    finally:
+        if client is not None:
+            try:
+                await client.close()
+            except Exception:
+              pass
 
 
 @router.post("/run", response_model=GeneralRunResponse)
@@ -115,7 +135,7 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
                 errors.append(f"RAG retrieval failed: {e}")
                 rag_used = False
 
-        synth = _try_general_synthesis(task, evidence)
+        synth = await _try_general_synthesis(task, evidence, use_rag=bool(rag_used and len(evidence) > 0))
         if synth.get("used"):
             actual_execution.append("general")
         else:

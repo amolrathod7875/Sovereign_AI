@@ -67,7 +67,9 @@ def test_coding_routes_to_coder():
 # 2. Vision -> VL ------------------------------------------------------------
 def test_vision_routes_to_vision():
     d = route(RoutingRequest(
-        task="Identify the major equipment and equipment tags visible in this P&ID image."))
+        task="Identify the major equipment and equipment tags visible in this P&ID image.",
+        has_image=True,
+    ))
     assert d.selected_model == "vision"
     assert "vision" in d.models_required
     assert any("vision" in c.lower() for c in d.capabilities)

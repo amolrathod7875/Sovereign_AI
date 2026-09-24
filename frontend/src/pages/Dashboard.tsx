@@ -14,7 +14,7 @@ export default function Dashboard() {
     apiClient.getNetworkEvents(10).then(setEvents).catch(() => setEvents([]))
   }, [])
 
-  const modelSummary = summarizeModels(models)
+  const modelSummary = summarizeModels(models, status?.components)
   const externalCalls = status?.external_api_calls ?? 0
   const backendUp = !error && status !== null
 
