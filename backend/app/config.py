@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     SOVEREIGN_DEV_USER_ID: str = "00000000-0000-0000-0000-000000000002"
     SOVEREIGN_DEV_DISPLAY_NAME: str = "Local Development User"
 
+    # M2 dynamic conversation context (Phase M2 — PostgreSQL history)
+    CONVERSATION_CONTEXT_MAX_MESSAGES: int = 20
+    CONVERSATION_CONTEXT_TOKEN_BUDGET: int = 500
+
     MAX_FILE_MB: int = 50
     SANDBOX_TIMEOUT_SECONDS: int = 10
     MAX_OUTPUT_KB: int = 256

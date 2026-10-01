@@ -217,11 +217,15 @@ export async function runGeneral(req: {
   task: string
   asset_tag?: string | null
   use_rag?: boolean
+  conversation_id?: string | null
+  current_message_id?: string | null
 }): Promise<GeneralRunResponse> {
   const { data } = await inference.post<GeneralRunResponse>('/general/run', {
     task: req.task,
     asset_tag: req.asset_tag ?? null,
     use_rag: req.use_rag ?? false,
+    conversation_id: req.conversation_id ?? null,
+    current_message_id: req.current_message_id ?? null,
   })
   return data
 }

@@ -11,12 +11,13 @@ POST /api/general/run
 import time
 from fastapi import APIRouter, HTTPException
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 from app.schemas import RoutingDecision
 from app.models.router import route, RoutingRequest, NoLocalModelAvailable
 from app.models.registry import get_model, is_local_endpoint
+from app.identity.principal import get_current_principal, Principal
 from agent.tools.search_kb import search_knowledge_base
 from agent.security.netguard import no_network
 
@@ -28,6 +29,8 @@ class GeneralRunRequest(BaseModel):
     task: str
     asset_tag: Optional[str] = None
     use_rag: bool = False
+    conversation_id: Optional[str] = None
+    current_message_id: Optional[str] = None
 
 
 class GeneralRunResponse(BaseModel):
@@ -42,9 +45,16 @@ class GeneralRunResponse(BaseModel):
     message: Optional[str] = None
     response_time_seconds: Optional[float] = None
     model_performance: Optional[Dict[str, Any]] = None
+    conversation_context: Optional[Dict[str, Any]] = None
 
 
-async def _try_general_synthesis(task: str, evidence: List[Dict[str, Any]], max_tokens: int = 1024, use_rag: bool = False) -> Dict[str, Any]:
+async def _try_general_synthesis(
+    task: str,
+    evidence: List[Dict[str, Any]],
+    max_tokens: int = 1024,
+    use_rag: bool = False,
+    history_messages: Optional[List[Dict[str, str]]] = None,
+) -> Dict[str, Any]:
     """Attempt local general synthesis. Never raises."""
     m = get_model("general")
     if not m:
@@ -66,21 +76,26 @@ async def _try_general_synthesis(task: str, evidence: List[Dict[str, Any]], max_
         if use_rag:
             system = (
                 "You are Sovereign AI. Answer using ONLY the supplied local evidence. "
-                "If the evidence does not answer the question, state that clearly."
+                "If the evidence does not answer the question, state that clearly. "
+                "Preceding conversation messages may be used to resolve references and follow-up "
+                "questions, but they are NOT authoritative organizational evidence."
             )
             ctx = "\n".join(f"- {e.get('text', '')}" for e in evidence[:4]) or "(no retrieved evidence)"
             user = f"Task: {task}\n\nLocal evidence:\n{ctx}"
         else:
             system = (
                 "You are Sovereign AI, a local on-premise assistant. "
+                "Use the preceding conversation messages to resolve references and follow-up questions. "
                 "Answer the user's question clearly and accurately. "
                 "Do not claim access to evidence that was not provided."
             )
             user = task
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ]
+
+        messages: List[Dict[str, str]] = [{"role": "system", "content": system}]
+        if history_messages:
+            messages.extend(history_messages)
+        messages.append({"role": "user", "content": user})
+
         client = ModelClient("general", endpoint)
         result = await client.generate_with_metrics(messages, max_tokens=max_tokens)
         answer = result["content"]
@@ -97,7 +112,7 @@ async def _try_general_synthesis(task: str, evidence: List[Dict[str, Any]], max_
             try:
                 await client.close()
             except Exception:
-              pass
+                pass
 
 
 @router.post("/run", response_model=GeneralRunResponse)
@@ -107,6 +122,27 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=422, detail="task must not be empty")
 
     request_started = time.perf_counter()
+
+    principal: Principal = get_current_principal()
+
+    context = None
+    context_usage = None
+    try:
+        from app.context.builder import build_conversation_context
+        context, context_usage = await build_conversation_context(
+            principal=principal,
+            conversation_id=req.conversation_id,
+            current_message_id=req.current_message_id,
+        )
+    except Exception as e:
+        logger.warning("conversation context build failed: %s", e)
+        context = None
+        context_usage = None
+
+    history_messages: List[Dict[str, str]] = []
+    if context and context.recent_messages:
+        for m in context.recent_messages:
+            history_messages.append({"role": m.role, "content": m.content})
 
     try:
         routing = route(RoutingRequest(task=task, asset_tag=req.asset_tag or None)).model_dump()
@@ -146,7 +182,9 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
                 errors.append(f"RAG retrieval failed: {e}")
                 rag_used = False
 
-        synth = await _try_general_synthesis(task, evidence, use_rag=bool(rag_used and len(evidence) > 0))
+        synth = await _try_general_synthesis(
+            task, evidence, use_rag=bool(rag_used and len(evidence) > 0), history_messages=history_messages
+        )
         if synth.get("used"):
             actual_execution.append("general")
         else:
@@ -161,6 +199,30 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
     response_time_seconds = round(time.perf_counter() - request_started, 3)
     model_performance = synth.get("performance") if synth.get("used") else None
 
+    if context_usage is None and req.conversation_id:
+        context_usage = type("ConversationContextUsage", (), {})()
+        context_usage.conversation_id = req.conversation_id
+        context_usage.history_used = False
+        context_usage.messages_considered = 0
+        context_usage.messages_included = 0
+        context_usage.estimated_history_tokens = 0
+        context_usage.truncated = False
+        context_usage.source = "none"
+        context_usage.reason = "history_unavailable"
+
+    conversation_context_meta = None
+    if context_usage is not None:
+        conversation_context_meta = {
+            "conversation_id": context_usage.conversation_id,
+            "history_used": context_usage.history_used,
+            "messages_considered": context_usage.messages_considered,
+            "messages_included": context_usage.messages_included,
+            "estimated_history_tokens": context_usage.estimated_history_tokens,
+            "truncated": context_usage.truncated,
+            "source": context_usage.source,
+            "reason": context_usage.reason,
+        }
+
     response = GeneralRunResponse(
         status=status,
         answer=answer,
@@ -173,6 +235,6 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
         message="General model is not currently available on this host." if status == "UNAVAILABLE" else None,
         response_time_seconds=response_time_seconds,
         model_performance=model_performance,
+        conversation_context=conversation_context_meta,
     )
     return response.model_dump()
-

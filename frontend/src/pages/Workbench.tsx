@@ -329,6 +329,21 @@ export default function Workbench() {
     const effectiveMode: TaskMode =
       mode === 'auto' ? (file ? 'vision' : 'knowledge') : mode
 
+    let currentMessageId: string | null = null
+
+    // Persist user message BEFORE inference so the context builder can reference it.
+    if (_conversationId) {
+      try {
+        const persistedUser = await apiClient.createConversationMessage(
+          _conversationId,
+          chatMessageToPersistentPayload(userMsg, _conversationId),
+        )
+        currentMessageId = persistedUser.id
+      } catch (persistErr) {
+        console.warn('History persistence failed (session continues):', persistErr)
+      }
+    }
+
     try {
       let assistant: ChatMessage
       if (effectiveMode === 'coding') {
@@ -336,7 +351,7 @@ export default function Workbench() {
       } else if (effectiveMode === 'vision') {
         assistant = await runVision()
       } else if (mode === 'knowledge') {
-        assistant = await runGeneral(input.trim(), true)
+        assistant = await runGeneral(input.trim(), true, currentMessageId)
       } else {
         if (mode === 'auto' && !file) {
           const d = await apiClient.routeTask({ task: input.trim() })
@@ -346,13 +361,13 @@ export default function Workbench() {
           } else if (taskType === 'DOCUMENT_ANALYSIS' && d.selected_model === 'vision') {
             assistant = await runVision()
           } else if (taskType === 'GENERAL_QA') {
-            assistant = await runGeneral(input.trim(), false)
+            assistant = await runGeneral(input.trim(), false, currentMessageId)
           } else if (taskType === 'RAG_QA') {
-            assistant = await runGeneral(input.trim(), true)
+            assistant = await runGeneral(input.trim(), true, currentMessageId)
           } else if (isIndustrialWorkflowRequest(input.trim())) {
             assistant = await runAgentTask(input.trim())
           } else {
-            assistant = await runGeneral(input.trim(), false)
+            assistant = await runGeneral(input.trim(), false, currentMessageId)
           }
         } else {
           assistant = await runAgentTask(input.trim())
@@ -361,15 +376,12 @@ export default function Workbench() {
 
       setMessages((m) => [...m, assistant])
 
-      // Persist user + assistant messages
+      // Persist assistant message after inference
       if (_conversationId) {
         try {
-          await apiClient.createConversationMessage(_conversationId, chatMessageToPersistentPayload(userMsg, _conversationId))
           await apiClient.createConversationMessage(_conversationId, chatMessageToPersistentPayload(assistant, _conversationId))
-          // Refresh conversation list metadata
           const list = await apiClient.listConversations()
           setConversations(list)
-          // Refresh messages if viewing same conversation
           if (selectedConversationId === _conversationId) {
             const msgs = await apiClient.getConversationMessages(_conversationId, 500, 0)
             setHistoryMessages(msgs)
@@ -498,8 +510,14 @@ export default function Workbench() {
     }
   }
 
-  async function runGeneral(task: string, useRag = false): Promise<ChatMessage> {
-    const res = await apiClient.runGeneral({ task, asset_tag: assetTag, use_rag: useRag })
+  async function runGeneral(task: string, useRag = false, currentMessageId?: string | null): Promise<ChatMessage> {
+    const res = await apiClient.runGeneral({
+      task,
+      asset_tag: assetTag,
+      use_rag: useRag,
+      conversation_id: selectedConversationId,
+      current_message_id: currentMessageId ?? null,
+    })
     const taskLabel = res.routing?.task_type
       ? String(res.routing.task_type).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
       : 'General'

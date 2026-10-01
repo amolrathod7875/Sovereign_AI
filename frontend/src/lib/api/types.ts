@@ -325,6 +325,17 @@ export interface RunSummary {
 }
 
 /** backend/app/api/general.py :: GeneralRunResponse */
+export interface ConversationContextUsage {
+  conversation_id: string | null
+  history_used: boolean
+  messages_considered: number
+  messages_included: number
+  estimated_history_tokens: number
+  truncated: boolean
+  source: 'postgresql_history' | 'none'
+  reason?: string | null
+}
+
 export interface GeneralRunResponse {
   status: string
   answer: string | null
@@ -347,6 +358,7 @@ export interface GeneralRunResponse {
   message?: string | null
   response_time_seconds: number | null
   model_performance: ModelPerformanceMetrics | null
+  conversation_context: ConversationContextUsage | null
 }
 
 // ---------------------------------------------------------------------------
