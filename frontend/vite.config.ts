@@ -4,13 +4,20 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
+
   server: {
+    host: '0.0.0.0',
     port: 3000,
+
+    // Allow ngrok URLs during development/demo
+    allowedHosts: true,
+
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
@@ -18,8 +25,10 @@ export default defineConfig({
       },
     },
   },
+
   preview: {
     port: 4173,
+
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
@@ -27,14 +36,21 @@ export default defineConfig({
       },
     },
   },
+
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     testTimeout: 60000,
+
     env: {
       VITE_API_BASE_URL: 'http://localhost:8000/api',
     },
-    exclude: ['**/node_modules/**', '**/dist/**', '**/*.e2e.test.ts'],
+
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/*.e2e.test.ts',
+    ],
   },
 })

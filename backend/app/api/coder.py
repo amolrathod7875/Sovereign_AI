@@ -12,8 +12,9 @@ real produced code and verification result instead of a second round-trip.
 """
 import asyncio
 import logging
+import time
 import uuid
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from httpx import ConnectError
 
 from fastapi import APIRouter, HTTPException
@@ -51,6 +52,8 @@ class CoderRunResponse(BaseModel):
     errors: List[Any] = []
     external_calls: int = 0
     routing: RoutingDecision | None = None
+    response_time_seconds: Optional[float] = None
+    model_performance: Optional[Dict[str, Any]] = None
 
 
 @router.post("/run", response_model=CoderRunResponse)
@@ -60,6 +63,7 @@ async def run_coder(req: CoderRunRequest):
     if not (req.task or "").strip():
         raise HTTPException(status_code=422, detail="task must not be empty")
 
+    request_started = time.perf_counter()
     run_id = f"coder_{uuid.uuid4().hex[:12]}"
     try:
         # The model runs in a thread so we never block the event loop.
@@ -119,6 +123,8 @@ async def run_coder(req: CoderRunRequest):
     if isinstance(routing, dict) and routing.get("error"):
         routing = None
 
+    response_time_seconds = round(time.perf_counter() - request_started, 3)
+
     return CoderRunResponse(
         run_id=run_id,
         status=result.get("status", "UNKNOWN"),
@@ -133,6 +139,8 @@ async def run_coder(req: CoderRunRequest):
         errors=result.get("errors", []) or [],
         external_calls=result.get("external_calls", 0) or 0,
         routing=routing,
+        response_time_seconds=response_time_seconds,
+        model_performance=result.get("model_performance"),
     )
 
 

@@ -23,6 +23,8 @@ class VisionAnalyzeResponse(BaseModel):
     execution_time: float
     external_calls: int = 0
     equipment_tags: list = []
+    response_time_seconds: Optional[float] = None
+    model_performance: Optional[Dict[str, Any]] = None
 
 
 def _analyze_guarded(file_path: str, prompt: Optional[str], analysis_type: str) -> Dict[str, Any]:
@@ -43,6 +45,7 @@ async def analyze(req: VisionAnalyzeRequest):
     from agent.tools.vision import VISION_MODEL_NAME, VisionUpstreamResponseError, VisionModelBusyError
     from agent.config import VISION_ENDPOINT
 
+    request_started = time.perf_counter()
     t0 = time.time()
     try:
         payload = await asyncio.to_thread(
@@ -104,6 +107,7 @@ async def analyze(req: VisionAnalyzeRequest):
         raise HTTPException(status_code=500, detail=f"vision analysis failed: {e}")
 
     result = payload["result"]
+    response_time_seconds = round(time.perf_counter() - request_started, 3)
     return VisionAnalyzeResponse(
         status="completed",
         result=result,
@@ -111,4 +115,6 @@ async def analyze(req: VisionAnalyzeRequest):
         execution_time=round(time.time() - t0, 3),
         external_calls=payload["external_calls"],
         equipment_tags=payload["equipment_tags"],
+        response_time_seconds=response_time_seconds,
+        model_performance=None,
     )

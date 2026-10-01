@@ -17,6 +17,7 @@ Phase 6 changes (integration only — the agent itself is untouched):
 """
 import asyncio
 import logging
+import time
 import uuid
 from typing import Dict, Any, List, Optional
 
@@ -62,6 +63,8 @@ class AgentRunResponse(BaseModel):
     routing: Optional[RoutingDecision] = None
     human_review_status: Optional[str] = None
     approval_record_available: bool = False
+    response_time_seconds: Optional[float] = None
+    model_performance: Optional[Dict[str, Any]] = None
 
 
 def _to_response(result: Dict[str, Any]) -> AgentRunResponse:
@@ -100,6 +103,7 @@ async def run_agent(req: AgentRunRequest):
     if not (req.task or "").strip():
         raise HTTPException(status_code=422, detail="task must not be empty")
 
+    request_started = time.perf_counter()
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     try:
         # The graph is synchronous and CPU-bound: keep it off the event loop.
@@ -147,6 +151,8 @@ async def run_agent(req: AgentRunRequest):
     resp = _to_response(result)
     resp.human_review_status = human_review_status
     resp.approval_record_available = approval_record_available
+    resp.response_time_seconds = round(time.perf_counter() - request_started, 3)
+    resp.model_performance = None
     return resp
 
 

@@ -3,7 +3,7 @@
 Tests for model unavailability, connection failures, timeouts, malformed responses, and recovery.
 """
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 from httpx import ConnectError
 
@@ -49,7 +49,7 @@ class TestCoderResilience:
         """Malformed JSON from server should be handled gracefully."""
         # This tests the ModelClient layer that coder uses internally
         from app.models.client import ModelClient
-        with patch.object(ModelClient, 'generate') as mock_generate:
+        with patch.object(ModelClient, 'generate_with_metrics', new_callable=AsyncMock) as mock_generate:
             mock_generate.side_effect = ValueError("Invalid JSON response")
             from agent.coder.model import complete
             with pytest.raises(Exception):

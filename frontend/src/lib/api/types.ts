@@ -9,6 +9,15 @@
  * Source of truth per type is noted in the comment above it.
  */
 
+/** backend/app/models/client.py :: ModelPerformanceMetrics */
+export interface ModelPerformanceMetrics {
+  prompt_tokens: number | null
+  completion_tokens: number | null
+  total_tokens: number | null
+  inference_seconds: number | null
+  tokens_per_second: number | null
+}
+
 /** backend/app/api/system.py :: health_check */
 export interface HealthResponse {
   status: string
@@ -156,6 +165,8 @@ export interface AgentRunResponse {
   analysis_type: string
   external_calls: number
   routing: RoutingDecision | null
+  response_time_seconds: number | null
+  model_performance: ModelPerformanceMetrics | null
 }
 
 /** backend/app/api/coder.py :: CoderRunResponse */
@@ -182,6 +193,8 @@ export interface CoderRunResponse {
   errors: unknown[]
   external_calls: number
   routing: RoutingDecision | null
+  response_time_seconds: number | null
+  model_performance: ModelPerformanceMetrics | null
 }
 
 /** backend/app/api/vision.py :: VisionAnalyzeResponse */
@@ -192,6 +205,8 @@ export interface VisionAnalyzeResponse {
   execution_time: number
   external_calls: number
   equipment_tags: string[]
+  response_time_seconds: number | null
+  model_performance: ModelPerformanceMetrics | null
 }
 
 /** backend/app/schemas/api.py :: DocumentUploadResponse */
@@ -330,6 +345,8 @@ export interface GeneralRunResponse {
   external_calls: number
   errors: string[]
   message?: string | null
+  response_time_seconds: number | null
+  model_performance: ModelPerformanceMetrics | null
 }
 
 // ---------------------------------------------------------------------------

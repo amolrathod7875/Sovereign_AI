@@ -1,3 +1,4 @@
+import dataclasses
 import httpx
 import logging
 from typing import Optional, Dict, Any
@@ -7,6 +8,15 @@ from app.config import settings
 from app.models.registry import update_model_status
 
 logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass
+class ModelPerformanceMetrics:
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+    inference_seconds: Optional[float] = None
+    tokens_per_second: Optional[float] = None
 
 
 class ModelClientError(Exception):
@@ -33,6 +43,23 @@ class ModelClient:
         timeout: float = 120.0,
         **kwargs,
     ) -> str:
+        result = await self.generate_with_metrics(
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            **kwargs,
+        )
+        return result["content"]
+
+    async def generate_with_metrics(
+        self,
+        messages: list,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        timeout: float = 120.0,
+        **kwargs,
+    ) -> Dict[str, Any]:
         try:
             response = await self.client.post(
                 f"{self.endpoint}/chat/completions",
@@ -68,7 +95,27 @@ class ModelClient:
             if not isinstance(message, dict) or "content" not in message:
                 raise ModelClientError(f"Model {self.model_id} response missing 'content' in message")
 
-            return message["content"]
+            content = message["content"]
+            usage = result.get("usage") or {}
+            performance_raw = result.get("performance") or {}
+            if not isinstance(performance_raw, dict):
+                performance_raw = {}
+            metrics = ModelPerformanceMetrics(
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+                total_tokens=usage.get("total_tokens"),
+                inference_seconds=performance_raw.get("inference_seconds") if isinstance(performance_raw, dict) else None,
+                tokens_per_second=performance_raw.get("tokens_per_second") if isinstance(performance_raw, dict) else None,
+            )
+            return {
+                "content": content,
+                "usage": {
+                    "prompt_tokens": metrics.prompt_tokens,
+                    "completion_tokens": metrics.completion_tokens,
+                    "total_tokens": metrics.total_tokens,
+                },
+                "performance": dataclasses.asdict(metrics),
+            }
         except Exception as e:
             logger.error(f"Model inference error for {self.model_id}: {e}")
             raise

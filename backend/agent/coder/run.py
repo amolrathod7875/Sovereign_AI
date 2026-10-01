@@ -45,6 +45,9 @@ def run_coder_task(
     workspace = workspace or str(CODER_DIR / run_id)
     initial = create_initial_state(run_id, task, workspace)
 
+    from agent.coder.model import _reset_metrics, _aggregate_metrics
+    _reset_metrics()
+
     try:
         routing = route(RoutingRequest(task=task, requires_code=True)).model_dump()
     except Exception as e:
@@ -57,6 +60,8 @@ def run_coder_task(
 
     fr = final.get("final_result") or {}
     to = fr.get("test_output") or final.get("test_output") or {}
+
+    model_performance = _aggregate_metrics(get_model_metrics())
 
     return {
         "run_id": run_id,
@@ -75,4 +80,5 @@ def run_coder_task(
         "errors": final.get("errors", []),
         "routing": routing,
         "final_result": fr,
+        "model_performance": model_performance,
     }

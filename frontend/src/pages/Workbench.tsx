@@ -11,6 +11,8 @@ import {
   Shield,
   X,
   Image as ImageIcon,
+  Clock,
+  Gauge,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { apiClient, ApiError } from '../lib/api/client'
@@ -20,6 +22,7 @@ import type {
   CoderRunResponse,
   VisionAnalyzeResponse,
   RoutingDecision,
+  ModelPerformanceMetrics,
 } from '../lib/api/types'
 
 type TaskMode = 'auto' | 'coding' | 'vision' | 'knowledge'
@@ -32,6 +35,12 @@ interface ExecutionMeta {
   tools: string | null
   local: boolean
   externalCalls: number
+  responseTimeSeconds: number | null
+  tokensPerSecond: number | null
+  promptTokens: number | null
+  completionTokens: number | null
+  totalTokens: number | null
+  modelInferenceSeconds: number | null
 }
 
 interface ChatMessage {
@@ -49,9 +58,27 @@ interface ChatMessage {
   artifacts?: Array<{ id: string; name: string; kind: string }>
   externalCalls?: number
   error?: string
+  modelPerformance?: ModelPerformanceMetrics | null
 }
 
 const VISION_TYPES = ['pid', 'general', 'document', 'ocr', 'inspection']
+
+function formatDuration(seconds: number | null | undefined): string {
+  if (seconds == null || Number.isNaN(seconds)) return '—'
+  if (seconds < 1) return `${Math.round(seconds * 1000)} ms`
+  if (seconds < 60) return `${seconds.toFixed(2)} s`
+  const m = Math.floor(seconds / 60)
+  const s = Math.round(seconds % 60)
+  return `${m}m ${s}s`
+}
+
+function formatTokens(m: ModelPerformanceMetrics | null | undefined): string | null {
+  if (!m) return null
+  const parts: string[] = []
+  if (m.prompt_tokens != null) parts.push(`${m.prompt_tokens} in`)
+  if (m.completion_tokens != null) parts.push(`${m.completion_tokens} out`)
+  return parts.length ? parts.join(' / ') : null
+}
 
 function isIndustrialWorkflowRequest(task: string): boolean {
   const text = task.toLowerCase()
@@ -184,6 +211,7 @@ export default function Workbench() {
     const routing: RoutingDecision | null = res.routing
     const artifacts = await resolveArtifacts(res.files)
     const routingModel = modelDisplayName(routing?.selected_model ?? 'qwen-coder')
+    const mp = res.model_performance ?? null
     return {
       id: `a-${Date.now()}`,
       role: 'assistant',
@@ -202,11 +230,18 @@ export default function Workbench() {
         tools: 'Sandbox',
         local: routing?.all_local ?? true,
         externalCalls: res.external_calls,
+        responseTimeSeconds: res.response_time_seconds ?? null,
+        tokensPerSecond: mp?.tokens_per_second ?? null,
+        promptTokens: mp?.prompt_tokens ?? null,
+        completionTokens: mp?.completion_tokens ?? null,
+        totalTokens: mp?.total_tokens ?? null,
+        modelInferenceSeconds: mp?.inference_seconds ?? null,
       },
       coderFiles: res.file_contents,
       coderTest: res.test_output,
       artifacts,
       externalCalls: res.external_calls,
+      modelPerformance: mp,
     }
   }
 
@@ -218,6 +253,7 @@ export default function Workbench() {
       analysis_type: visionType,
       prompt: input.trim() || null,
     })
+    const mp = res.model_performance ?? null
     return {
       id: `a-${Date.now()}`,
       role: 'assistant',
@@ -231,10 +267,17 @@ export default function Workbench() {
         tools: null,
         local: true,
         externalCalls: res.external_calls,
+        responseTimeSeconds: res.response_time_seconds ?? null,
+        tokensPerSecond: mp?.tokens_per_second ?? null,
+        promptTokens: mp?.prompt_tokens ?? null,
+        completionTokens: mp?.completion_tokens ?? null,
+        totalTokens: mp?.total_tokens ?? null,
+        modelInferenceSeconds: mp?.inference_seconds ?? null,
       },
       visionResult: res.result,
       visionTags: res.equipment_tags,
       externalCalls: res.external_calls,
+      modelPerformance: mp,
     }
   }
 
@@ -247,6 +290,7 @@ export default function Workbench() {
     const actualModel = res.actual_model_execution?.length
       ? res.actual_model_execution.join(', ')
       : 'NONE'
+    const mp = res.model_performance ?? null
     return {
       id: `a-${Date.now()}`,
       role: 'assistant',
@@ -260,6 +304,12 @@ export default function Workbench() {
         tools: null,
         local: res.actual_model_execution.length > 0,
         externalCalls: res.external_calls,
+        responseTimeSeconds: res.response_time_seconds ?? null,
+        tokensPerSecond: mp?.tokens_per_second ?? null,
+        promptTokens: mp?.prompt_tokens ?? null,
+        completionTokens: mp?.completion_tokens ?? null,
+        totalTokens: mp?.total_tokens ?? null,
+        modelInferenceSeconds: mp?.inference_seconds ?? null,
       },
       evidence: res.evidence?.map((e) => ({
         claim: e.claim,
@@ -269,6 +319,7 @@ export default function Workbench() {
       })) || [],
       errors: res.errors,
       externalCalls: res.external_calls,
+      modelPerformance: mp,
     }
   }
 
@@ -298,6 +349,7 @@ export default function Workbench() {
         ? 'Multimodal Analysis'
         : 'Knowledge'
     const routingModel = modelDisplayName(routing?.selected_model)
+    const mp = finalRes.model_performance ?? null
     return {
       id: `a-${Date.now()}`,
       role: 'assistant',
@@ -311,6 +363,12 @@ export default function Workbench() {
         tools: routing?.requires_tools ? 'Local tools' : null,
         local: routing?.all_local ?? true,
         externalCalls: finalRes.external_calls,
+        responseTimeSeconds: finalRes.response_time_seconds ?? null,
+        tokensPerSecond: mp?.tokens_per_second ?? null,
+        promptTokens: mp?.prompt_tokens ?? null,
+        completionTokens: mp?.completion_tokens ?? null,
+        totalTokens: mp?.total_tokens ?? null,
+        modelInferenceSeconds: mp?.inference_seconds ?? null,
       },
       evidence: finalRes.evidence,
       visionResult: finalRes.vision_evidence?.[0] ?? null,
@@ -318,6 +376,7 @@ export default function Workbench() {
       errors: finalRes.errors,
       artifacts,
       externalCalls: finalRes.external_calls,
+      modelPerformance: mp,
     }
   }
 
@@ -471,6 +530,13 @@ function ModeButton({
 }
 
 function MessageView({ message }: { message: ChatMessage }) {
+  const speed = message.modelPerformance?.tokens_per_second != null && message.modelPerformance.tokens_per_second > 0
+    ? `${message.modelPerformance.tokens_per_second.toFixed(1)} tok/s`
+    : null
+  const duration = message.execution?.responseTimeSeconds ?? null
+  const metricLine = speed
+    ? `${formatDuration(duration)}  \u2022  ${speed}`
+    : formatDuration(duration)
   return (
     <div className="space-y-2">
       <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -512,6 +578,12 @@ function MessageView({ message }: { message: ChatMessage }) {
           </span>
         </div>
       )}
+
+      {message.role === 'assistant' && metricLine && (
+        <div className="ml-4 text-[10px] text-text-secondary">
+          {metricLine}
+        </div>
+      )}
     </div>
   )
 }
@@ -525,13 +597,23 @@ function ExecutionCard({ message }: { message: ChatMessage }) {
       : ex.rag
         ? 'Enabled'
         : 'Not used'
+  const speed = ex.tokensPerSecond != null && ex.tokensPerSecond > 0
+    ? `${ex.tokensPerSecond.toFixed(1)} tok/s`
+    : null
+  const tokens = formatTokens(message.modelPerformance)
   return (
     <div className="rounded-lg border border-border bg-background-tertiary p-3 space-y-1.5">
+      <Row icon={Clock} label="Response time" value={formatDuration(ex.responseTimeSeconds)} />
       <Row icon={Cpu} label="Task" value={ex.task} />
       <Row icon={Database} label="Routing" value={ex.routing ?? '—'} />
       <Row icon={Cpu} label="Actual execution" value={ex.actualModel} />
       <Row icon={Database} label="RAG" value={ragText} />
       <Row icon={Wrench} label="Tools" value={ex.tools ?? '—'} />
+      {speed && <Row icon={Gauge} label="Generation" value={speed} />}
+      {!speed && ex.responseTimeSeconds != null && (
+        <Row icon={Gauge} label="Generation" value="—" />
+      )}
+      {tokens && <Row icon={Cpu} label="Tokens" value={tokens} />}
       <Row
         icon={Shield}
         label="Local"

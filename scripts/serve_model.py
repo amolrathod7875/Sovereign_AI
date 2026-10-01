@@ -72,6 +72,7 @@ def build_app(model_id: str, llm: Llama, admission_timeout: float) -> FastAPI:
         if stream:
             stream = False
 
+        inference_started = time.perf_counter()
         try:
             out = await asyncio.to_thread(
                 _run_inference,
@@ -98,30 +99,46 @@ def build_app(model_id: str, llm: Llama, admission_timeout: float) -> FastAPI:
                 },
             )
 
-        content = out["choices"][0]["message"]["content"]
-        prompt_tokens = out.get("usage", {}).get("prompt_tokens", 0)
-        completion_tokens = out.get("usage", {}).get("completion_tokens", 0)
+        inference_seconds = time.perf_counter() - inference_started
 
-        return JSONResponse(
-            {
-                "id": f"chatcmpl-{uuid.uuid4().hex}",
-                "object": "chat.completion",
-                "created": int(time.time()),
-                "model": model_id,
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {"role": "assistant", "content": content},
-                        "finish_reason": "stop",
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": prompt_tokens + completion_tokens,
-                },
-            }
+        content = out["choices"][0]["message"]["content"]
+        usage = out.get("usage", {}) or {}
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
+        tokens_per_second = (
+            round(completion_tokens / inference_seconds, 2)
+            if completion_tokens > 0 and inference_seconds > 0
+            else None
         )
+
+        response_body = {
+            "id": f"chatcmpl-{uuid.uuid4().hex}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": model_id,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": content},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+            },
+        }
+        if inference_seconds > 0 or completion_tokens > 0:
+            response_body["performance"] = {
+                "inference_seconds": round(inference_seconds, 3),
+                "tokens_per_second": tokens_per_second,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+            }
+        return JSONResponse(response_body)
 
     return app
 

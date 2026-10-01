@@ -189,7 +189,11 @@ def test_model_status_case_insensitive_availability():
 # 11. Online General — actual string answer, not coroutine
 # ---------------------------------------------------------------------------
 def test_general_run_online_returns_completed_with_string_answer():
-    with patch.object(ModelClient, 'generate', new_callable=AsyncMock, return_value="GENERAL TEST ANSWER"):
+    with patch.object(ModelClient, 'generate_with_metrics', new_callable=AsyncMock, return_value={
+        "content": "GENERAL TEST ANSWER",
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        "performance": {"inference_seconds": 0.1, "tokens_per_second": 50.0},
+    }):
         resp = client.post("/api/general/run", json={
             "task": "Hey, what can you do?",
             "asset_tag": None,
@@ -222,7 +226,11 @@ def test_general_run_online_rag_returns_evidence_and_answer():
         }
     ]
     with patch("app.api.general.search_knowledge_base", return_value=fake_hits):
-        with patch.object(ModelClient, 'generate', new_callable=AsyncMock, return_value="INSPECTION ANSWER"):
+        with patch.object(ModelClient, 'generate_with_metrics', new_callable=AsyncMock, return_value={
+            "content": "INSPECTION ANSWER",
+            "usage": {"prompt_tokens": 200, "completion_tokens": 100, "total_tokens": 300},
+            "performance": {"inference_seconds": 1.0, "tokens_per_second": 100.0},
+        }):
             resp = client.post("/api/general/run", json={
                 "task": "Give me information about the inspection report for R-1001.",
                 "asset_tag": "R-1001",

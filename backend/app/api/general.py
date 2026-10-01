@@ -8,6 +8,7 @@ POST /api/general/run
   * GENERAL_QA -> local general synthesis only
   * RAG_QA     -> hybrid retrieval + local general synthesis (if available)
 """
+import time
 from fastapi import APIRouter, HTTPException
 import logging
 from typing import Dict, Any, List, Optional
@@ -39,6 +40,8 @@ class GeneralRunResponse(BaseModel):
     external_calls: int = 0
     errors: List[str] = []
     message: Optional[str] = None
+    response_time_seconds: Optional[float] = None
+    model_performance: Optional[Dict[str, Any]] = None
 
 
 async def _try_general_synthesis(task: str, evidence: List[Dict[str, Any]], max_tokens: int = 1024, use_rag: bool = False) -> Dict[str, Any]:
@@ -79,8 +82,14 @@ async def _try_general_synthesis(task: str, evidence: List[Dict[str, Any]], max_
             {"role": "user", "content": user},
         ]
         client = ModelClient("general", endpoint)
-        answer = await client.generate(messages, max_tokens=max_tokens)
-        return {"used": True, "answer": answer}
+        result = await client.generate_with_metrics(messages, max_tokens=max_tokens)
+        answer = result["content"]
+        return {
+            "used": True,
+            "answer": answer,
+            "usage": result.get("usage"),
+            "performance": result.get("performance"),
+        }
     except Exception as e:
         return {"used": False, "reason": f"general synthesis failed: {e}", "rag_evidence_count": len(evidence)}
     finally:
@@ -96,6 +105,8 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
     task = (req.task or "").strip()
     if not task:
         raise HTTPException(status_code=422, detail="task must not be empty")
+
+    request_started = time.perf_counter()
 
     try:
         routing = route(RoutingRequest(task=task, asset_tag=req.asset_tag or None)).model_dump()
@@ -147,6 +158,9 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
     if not answer and not actual_execution:
         answer = None
 
+    response_time_seconds = round(time.perf_counter() - request_started, 3)
+    model_performance = synth.get("performance") if synth.get("used") else None
+
     response = GeneralRunResponse(
         status=status,
         answer=answer,
@@ -157,6 +171,8 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
         external_calls=guard.external_calls,
         errors=errors,
         message="General model is not currently available on this host." if status == "UNAVAILABLE" else None,
+        response_time_seconds=response_time_seconds,
+        model_performance=model_performance,
     )
     return response.model_dump()
 
