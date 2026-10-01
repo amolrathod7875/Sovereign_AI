@@ -20,6 +20,7 @@ export default [
         File: 'readonly',
         FormData: 'readonly',
         URL: 'readonly',
+        URLSearchParams: 'readonly',
         Blob: 'readonly',
         navigator: 'readonly',
         console: 'readonly',
@@ -36,6 +37,8 @@ export default [
         process: 'readonly',
         module: 'readonly',
         require: 'readonly',
+        confirm: 'readonly',
+        alert: 'readonly',
       },
     },
     plugins: {

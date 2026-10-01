@@ -61,6 +61,7 @@ sentence-transformers==3.2.1
 psycopg2-binary==2.9.10
 sqlalchemy==2.0.35
 asyncpg==0.29.0
+alembic==1.14.1
 
 # -----------------------------
 # Documents

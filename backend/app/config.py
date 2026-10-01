@@ -13,10 +13,11 @@ class Settings(BaseSettings):
 
     # PostgreSQL. The docker-compose deployment uses the service name "postgres".
     # For local/standalone runs (no docker) override with a real async Postgres URL,
-    # e.g. postgresql+asyncpg://postgres:postgres@localhost:5432/sovereign_ai.
+    # e.g. postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/sovereign_ai.
     # NOTE: the app uses the async SQLAlchemy engine, so the driver MUST be async
     # (postgresql+asyncpg://). Using the sync psycopg2 driver raises at import time.
-    POSTGRES_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/sovereign_ai"
+    # Use backend/.env to set the real password for the local instance.
+    POSTGRES_URL: str = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/sovereign_ai"
 
     # Qdrant. The authoritative agent RAG path uses an embedded local Qdrant
     # (see backend/rag/config.py: QDRANT_PATH), so this server is only needed by
@@ -64,6 +65,12 @@ class Settings(BaseSettings):
         "http://localhost:4173,http://127.0.0.1:4173,"
         "http://localhost:5173,http://127.0.0.1:5173"
     )
+
+    # M1 local development principal (not authentication — see identity/principal.py).
+    # Replace only the principal resolver in a future auth phase.
+    SOVEREIGN_DEV_ORGANIZATION_ID: str = "00000000-0000-0000-0000-000000000001"
+    SOVEREIGN_DEV_USER_ID: str = "00000000-0000-0000-0000-000000000002"
+    SOVEREIGN_DEV_DISPLAY_NAME: str = "Local Development User"
 
     MAX_FILE_MB: int = 50
     SANDBOX_TIMEOUT_SECONDS: int = 10

@@ -33,6 +33,12 @@ import type {
   JudgeFlagshipEvidence,
   JudgeEvaluationEvidence,
   GeneralRunResponse,
+  ConversationSummary,
+  ConversationDetail,
+  ConversationMessage,
+  CreateConversationRequest,
+  UpdateConversationRequest,
+  CreateMessageRequest,
 } from './types'
 
 const BASE_URL =
@@ -337,6 +343,61 @@ export const apiClient = {
   getJudgeFlagship,
   getJudgeEvaluation,
   runGeneral,
+  createConversation,
+  listConversations,
+  getConversation,
+  updateConversation,
+  deleteConversation,
+  getConversationMessages,
+  createConversationMessage,
+}
+
+// ---------------------------------------------------------------------------
+// Chat History — Phase M1
+// ---------------------------------------------------------------------------
+
+export async function createConversation(req: CreateConversationRequest = {}): Promise<ConversationDetail> {
+  const { data } = await api.post<ConversationDetail>('/conversations', req)
+  return data
+}
+
+export async function listConversations(limit = 50, offset = 0): Promise<ConversationSummary[]> {
+  const { data } = await api.get<ConversationSummary[]>('/conversations', { params: { limit, offset } })
+  return data
+}
+
+export async function getConversation(conversationId: string): Promise<ConversationDetail> {
+  const { data } = await api.get<ConversationDetail>(`/conversations/${encodeURIComponent(conversationId)}`)
+  return data
+}
+
+export async function updateConversation(conversationId: string, req: UpdateConversationRequest): Promise<ConversationDetail> {
+  const { data } = await api.patch<ConversationDetail>(`/conversations/${encodeURIComponent(conversationId)}`, req)
+  return data
+}
+
+export async function deleteConversation(conversationId: string): Promise<{ ok: boolean }> {
+  const { data } = await api.delete<{ ok: boolean }>(`/conversations/${encodeURIComponent(conversationId)}`)
+  return data
+}
+
+export async function getConversationMessages(
+  conversationId: string,
+  limit = 200,
+  offset = 0,
+): Promise<ConversationMessage[]> {
+  const { data } = await api.get<ConversationMessage[]>(`/conversations/${encodeURIComponent(conversationId)}/messages`, {
+    params: { limit, offset },
+  })
+  return data
+}
+
+export async function createConversationMessage(
+  conversationId: string,
+  req: CreateMessageRequest,
+): Promise<ConversationMessage> {
+  const { data } = await api.post<ConversationMessage>(`/conversations/${encodeURIComponent(conversationId)}/messages`, req)
+  return data
 }
 
 export default apiClient

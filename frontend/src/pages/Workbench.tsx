@@ -13,6 +13,9 @@ import {
   Image as ImageIcon,
   Clock,
   Gauge,
+  Plus,
+  Trash2,
+  Pencil,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { apiClient, ApiError } from '../lib/api/client'
@@ -23,6 +26,9 @@ import type {
   VisionAnalyzeResponse,
   RoutingDecision,
   ModelPerformanceMetrics,
+  ConversationSummary,
+  ConversationMessage,
+  CreateMessageRequest,
 } from '../lib/api/types'
 
 type TaskMode = 'auto' | 'coding' | 'vision' | 'knowledge'
@@ -106,6 +112,80 @@ function resolveArtifacts(names: string[]) {
   })
 }
 
+function chatMessageToPersistentPayload(msg: ChatMessage, _conversationId: string): CreateMessageRequest {
+  return {
+    client_message_id: msg.id,
+    role: msg.role,
+    content: msg.content,
+    mode: msg.mode ?? null,
+    status: msg.error ? 'FAILED' : 'OK',
+    task_type: msg.execution?.task ?? null,
+    actual_model: msg.execution?.actualModel ?? null,
+    external_calls: msg.externalCalls ?? msg.execution?.externalCalls ?? null,
+    response_time_seconds: msg.execution?.responseTimeSeconds ?? null,
+    model_inference_seconds: msg.execution?.modelInferenceSeconds ?? null,
+    tokens_per_second: msg.execution?.tokensPerSecond ?? null,
+    prompt_tokens: msg.execution?.promptTokens ?? null,
+    completion_tokens: msg.execution?.completionTokens ?? null,
+    total_tokens: msg.execution?.totalTokens ?? null,
+    error_detail: msg.error ?? null,
+    display_payload: msg.execution
+      ? {
+          execution: msg.execution,
+          evidence: msg.evidence ?? null,
+          visionResult: msg.visionResult ?? null,
+          visionTags: msg.visionTags ?? null,
+          coderFiles: msg.coderFiles ?? null,
+          coderTest: msg.coderTest ?? null,
+          artifacts: msg.artifacts ?? null,
+          errors: msg.errors ?? null,
+        }
+      : null,
+  }
+}
+
+function persistedMessageToChatMessage(msg: ConversationMessage): ChatMessage {
+  const payload = msg.display_payload as Record<string, unknown> | null
+  const execution = payload?.execution as ExecutionMeta | undefined
+  return {
+    id: msg.client_message_id || msg.id,
+    role: msg.role,
+    content: msg.content || '',
+    mode: (msg.mode as TaskMode | undefined) ?? execution?.task ? 'knowledge' : undefined,
+    execution,
+    evidence: (payload?.evidence as ChatMessage['evidence']) ?? [],
+    visionResult: (payload?.visionResult as ChatMessage['visionResult']) ?? null,
+    visionTags: (payload?.visionTags as ChatMessage['visionTags']) ?? [],
+    errors: (payload?.errors as ChatMessage['errors']) ?? [],
+    coderFiles: (payload?.coderFiles as ChatMessage['coderFiles']) ?? undefined,
+    coderTest: (payload?.coderTest as ChatMessage['coderTest']) ?? undefined,
+    artifacts: (payload?.artifacts as ChatMessage['artifacts']) ?? [],
+    externalCalls: msg.external_calls ?? execution?.externalCalls,
+    error: msg.error_detail ?? undefined,
+    modelPerformance: execution
+      ? {
+          prompt_tokens: msg.prompt_tokens ?? execution.promptTokens ?? null,
+          completion_tokens: msg.completion_tokens ?? execution.completionTokens ?? null,
+          total_tokens: msg.total_tokens ?? execution.totalTokens ?? null,
+          inference_seconds: msg.model_inference_seconds ?? execution.modelInferenceSeconds ?? null,
+          tokens_per_second: msg.tokens_per_second ?? execution.tokensPerSecond ?? null,
+        }
+      : null,
+  }
+}
+
+function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 export default function Workbench() {
   const [input, setInput] = useState('')
   const [mode, setMode] = useState<TaskMode>('auto')
@@ -116,6 +196,18 @@ export default function Workbench() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // History state
+  const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
+  const [_historyMessages, setHistoryMessages] = useState<ConversationMessage[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [isNewChat, setIsNewChat] = useState(true)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -128,16 +220,71 @@ export default function Workbench() {
     }
   }, [previewUrl])
 
-  function attachFile(f: File | null) {
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
-    if (!f) {
-      setFile(null)
-      setPreviewUrl(null)
-      return
+  // Load conversation list on mount and when history becomes available
+  useEffect(() => {
+    if (historyUnavailable) return
+    let cancelled = false
+    async function loadConversations() {
+      try {
+        const list = await apiClient.listConversations()
+        if (!cancelled) setConversations(list)
+      } catch (err) {
+        if (!cancelled) {
+          const detail = err instanceof ApiError ? err.detail : 'History unavailable'
+          if (err instanceof ApiError && err.status === 503) {
+            setHistoryUnavailable(true)
+          }
+          setHistoryError(detail)
+        }
+      }
     }
-    setFile(f)
-    if (/^image\//.test(f.type)) setPreviewUrl(URL.createObjectURL(f))
-    else setPreviewUrl(null)
+    loadConversations()
+    return () => {
+      cancelled = true
+    }
+  }, [historyUnavailable])
+
+  // Load conversation from URL parameter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const cid = params.get('conversation')
+    if (cid && !selectedConversationId && !historyUnavailable) {
+      openConversation(cid)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function openConversation(conversationId: string) {
+    setHistoryLoading(true)
+    setHistoryError(null)
+    setSelectedConversationId(conversationId)
+    setIsNewChat(false)
+    setMessages([])
+    try {
+      const msgs = await apiClient.getConversationMessages(conversationId, 500, 0)
+      setHistoryMessages(msgs)
+      setMessages(msgs.map(persistedMessageToChatMessage))
+    } catch (err) {
+      const detail = err instanceof ApiError ? err.detail : err instanceof Error ? err.message : 'Failed to load conversation'
+      setHistoryError(detail)
+      if (err instanceof ApiError && err.status === 404) {
+        setSelectedConversationId(null)
+        setIsNewChat(true)
+      }
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  async function handleNewChat() {
+    setSelectedConversationId(null)
+    setIsNewChat(true)
+    setMessages([])
+    setHistoryMessages([])
+    setError(null)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('conversation')
+    window.history.replaceState({}, '', url.toString())
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -145,6 +292,30 @@ export default function Workbench() {
     if ((!input.trim() && !file) || isProcessing) return
 
     setError(null)
+
+    let _conversationId = selectedConversationId
+
+    // Lazily create conversation on first message
+    if (!_conversationId) {
+      try {
+        const conv = await apiClient.createConversation({ title: 'New conversation' })
+        _conversationId = conv.id
+        setSelectedConversationId(_conversationId)
+        setIsNewChat(false)
+        // Update URL
+        const url = new URL(window.location.href)
+        url.searchParams.set('conversation', _conversationId)
+        window.history.replaceState({}, '', url.toString())
+        // Refresh conversation list
+        const list = await apiClient.listConversations()
+        setConversations(list)
+      } catch (err) {
+        const detail = err instanceof ApiError ? err.detail : err instanceof Error ? err.message : 'Failed to create conversation'
+        setError(detail)
+        return
+      }
+    }
+
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
@@ -187,7 +358,26 @@ export default function Workbench() {
           assistant = await runAgentTask(input.trim())
         }
       }
+
       setMessages((m) => [...m, assistant])
+
+      // Persist user + assistant messages
+      if (_conversationId) {
+        try {
+          await apiClient.createConversationMessage(_conversationId, chatMessageToPersistentPayload(userMsg, _conversationId))
+          await apiClient.createConversationMessage(_conversationId, chatMessageToPersistentPayload(assistant, _conversationId))
+          // Refresh conversation list metadata
+          const list = await apiClient.listConversations()
+          setConversations(list)
+          // Refresh messages if viewing same conversation
+          if (selectedConversationId === _conversationId) {
+            const msgs = await apiClient.getConversationMessages(_conversationId, 500, 0)
+            setHistoryMessages(msgs)
+          }
+        } catch (persistErr) {
+          console.warn('History persistence failed (session continues):', persistErr)
+        }
+      }
     } catch (err) {
       const detail = err instanceof ApiError ? err.detail : err instanceof Error ? err.message : 'Request failed'
       setError(detail)
@@ -200,10 +390,37 @@ export default function Workbench() {
           error: detail,
         },
       ])
+      // Persist error message if we have a conversation
+      if (_conversationId) {
+        try {
+          await apiClient.createConversationMessage(_conversationId, {
+            role: 'assistant',
+            content: `Request failed (${err instanceof ApiError ? err.status : '—'}).`,
+            error_detail: detail,
+            status: 'FAILED',
+          })
+          const list = await apiClient.listConversations()
+          setConversations(list)
+        } catch (persistErr) {
+          console.warn('History persistence failed (session continues):', persistErr)
+        }
+      }
     } finally {
       setIsProcessing(false)
       attachFile(null)
     }
+  }
+
+  function attachFile(f: File | null) {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    if (!f) {
+      setFile(null)
+      setPreviewUrl(null)
+      return
+    }
+    setFile(f)
+    if (/^image\//.test(f.type)) setPreviewUrl(URL.createObjectURL(f))
+    else setPreviewUrl(null)
   }
 
   async function runCoding(task: string): Promise<ChatMessage> {
@@ -380,11 +597,149 @@ export default function Workbench() {
     }
   }
 
+  async function handleDeleteConversation(conversationId: string) {
+    if (!confirm('Delete this conversation? This cannot be undone.')) return
+    try {
+      await apiClient.deleteConversation(conversationId)
+      if (selectedConversationId === conversationId) {
+        handleNewChat()
+      }
+      const list = await apiClient.listConversations()
+      setConversations(list)
+    } catch (err) {
+      const detail = err instanceof ApiError ? err.detail : err instanceof Error ? err.message : 'Delete failed'
+      setError(detail)
+    }
+  }
+
+  async function handleRename(conversationId: string) {
+    if (!renameValue.trim()) return
+    try {
+      await apiClient.updateConversation(conversationId, { title: renameValue.trim() })
+      setRenamingId(null)
+      setRenameValue('')
+      const list = await apiClient.listConversations()
+      setConversations(list)
+      // Update current if same conversation
+      if (selectedConversationId === conversationId) {
+        await apiClient.getConversation(conversationId)
+        // title is shown in conversation list; no local message state change needed
+      }
+    } catch (err) {
+      const detail = err instanceof ApiError ? err.detail : err instanceof Error ? err.message : 'Rename failed'
+      setError(detail)
+    }
+  }
+
+  const selectedConversation = conversations.find((c) => c.id === selectedConversationId) || null
+
   return (
     <div className="flex gap-6 h-full">
+      {/* Conversations Panel */}
+      <div className="w-64 flex flex-col bg-background-secondary rounded-lg border border-border overflow-hidden">
+        <div className="border-b border-border p-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-text-primary uppercase tracking-wide">History</h3>
+          <button
+            type="button"
+            onClick={handleNewChat}
+            className="p-1 rounded hover:bg-background-tertiary text-text-secondary hover:text-text-primary"
+            title="New Chat"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+
+        {historyUnavailable && (
+          <div className="p-3 text-xs text-accent-warning bg-accent-warning/10 border-b border-accent-warning/30">
+            History unavailable
+          </div>
+        )}
+
+        <div className="flex-1 overflow-auto">
+          {historyLoading && (
+            <div className="p-3 text-xs text-text-secondary">Loading…</div>
+          )}
+          {!historyLoading && conversations.length === 0 && !historyUnavailable && (
+            <div className="p-3 text-xs text-text-secondary">No conversations yet.</div>
+          )}
+          {conversations.map((c) => (
+            <div
+              key={c.id}
+              className={clsx(
+                'group flex items-start gap-2 px-3 py-2 cursor-pointer border-b border-border/50 hover:bg-background-tertiary',
+                selectedConversationId === c.id ? 'bg-accent-primary/10' : '',
+              )}
+              onClick={() => openConversation(c.id)}
+            >
+              <div className="flex-1 min-w-0">
+                {renamingId === c.id ? (
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={() => handleRename(c.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRename(c.id)
+                      if (e.key === 'Escape') setRenamingId(null)
+                    }}
+                    className="w-full text-xs bg-background-primary border border-border rounded px-1 py-0.5 text-text-primary"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <p className="text-xs text-text-primary truncate">{c.title || 'New conversation'}</p>
+                )}
+                <p className="text-[10px] text-text-secondary">{timeAgo(c.last_message_at || c.updated_at)}</p>
+              </div>
+              <div className="hidden group-hover:flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setRenamingId(c.id)
+                    setRenameValue(c.title || '')
+                  }}
+                  className="p-0.5 rounded hover:bg-background-primary text-text-secondary"
+                  title="Rename"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDeleteConversation(c.id)
+                  }}
+                  className="p-0.5 rounded hover:bg-background-primary text-accent-danger"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Chat Area */}
       <div className="flex-1 flex flex-col bg-background-secondary rounded-lg border border-border overflow-hidden">
         <div className="border-b border-border p-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleNewChat}
+            className="p-1.5 rounded-md hover:bg-background-tertiary text-text-secondary hover:text-text-primary"
+            title="New Chat"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+          {!isNewChat && selectedConversation && (
+            <span className="text-xs text-text-secondary truncate max-w-[200px]">
+              {selectedConversation.title || 'New conversation'}
+            </span>
+          )}
+          {isNewChat && (
+            <span className="text-xs text-text-secondary">New Chat</span>
+          )}
+          <div className="flex-1" />
           <ModeButton active={mode === 'auto'} onClick={() => setMode('auto')} label="Auto" />
           <ModeButton active={mode === 'coding'} onClick={() => setMode('coding')} label="Coding" icon={Cpu} />
           <ModeButton active={mode === 'vision'} onClick={() => setMode('vision')} label="Vision" icon={Eye} />
@@ -415,7 +770,17 @@ export default function Workbench() {
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-auto p-4 space-y-4">
-          {messages.length === 0 && !isProcessing && (
+          {historyLoading && (
+            <div className="flex justify-center py-8">
+              <div className="text-xs text-text-secondary">Loading conversation…</div>
+            </div>
+          )}
+          {historyError && (
+            <div className="text-xs text-accent-warning bg-accent-warning/10 border border-accent-warning/30 rounded p-2">
+              {historyError}
+            </div>
+          )}
+          {messages.length === 0 && !isProcessing && !historyLoading && (
             <div className="flex flex-col items-center justify-center h-full text-text-secondary">
               <Shield className="w-12 h-12 mb-4 opacity-50 text-accent-sovereign" />
               <p className="text-sm">Start a task with Sovereign AI</p>

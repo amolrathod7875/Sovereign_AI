@@ -22,8 +22,9 @@ from app.api import (
     receipt_chain,
     judge,
     general,
+    conversations,
 )
-from app.storage.postgres import init_db
+from app.storage.postgres import init_db, ensure_dev_principal
 from app.storage.qdrant import init_qdrant
 
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +35,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting Sovereign AI backend...")
     await init_db()
+    try:
+        await ensure_dev_principal()
+    except Exception:
+        logger.warning("Dev principal bootstrap failed (continuing).", exc_info=True)
     await init_qdrant()
     logger.info("Database initialized")
     yield
@@ -90,3 +95,8 @@ async def root():
         "status": "running",
         "sovereign_mode": settings.SOVEREIGN_MODE,
     }
+
+
+# Conversation history (M1). Mounted after core routers so the global
+# namespace does not collide with /api/chat or other legacy endpoints.
+app.include_router(conversations.router, prefix="/api", tags=["conversations"])

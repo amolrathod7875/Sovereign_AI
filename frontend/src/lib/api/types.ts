@@ -350,6 +350,100 @@ export interface GeneralRunResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Chat History — Phase M1 backend/app/api/conversations.py
+// ---------------------------------------------------------------------------
+
+export interface ConversationSummary {
+  id: string
+  title: string | null
+  created_at: string | null
+  updated_at: string | null
+  last_message_at: string | null
+  message_count: number
+  archived: boolean
+}
+
+export interface ConversationDetail extends ConversationSummary {
+  owner_user_id: string
+  organization_id: string
+}
+
+export interface ConversationAttachment {
+  id: string
+  message_id: string
+  conversation_id: string
+  document_id: string | null
+  filename: string
+  mime_type: string | null
+  size: number | null
+  checksum: string | null
+  created_at: string | null
+}
+
+export interface ConversationMessage {
+  id: string
+  conversation_id: string
+  organization_id: string
+  author_user_id: string | null
+  sequence_no: number
+  role: 'user' | 'assistant'
+  content: string | null
+  created_at: string | null
+  status: string | null
+  mode: string | null
+  task_type: string | null
+  routing_model: string | null
+  actual_model: string | null
+  rag_used: boolean | null
+  tools_used: string | null
+  local_execution: boolean | null
+  external_calls: number | null
+  response_time_seconds: number | null
+  model_inference_seconds: number | null
+  tokens_per_second: number | null
+  prompt_tokens: number | null
+  completion_tokens: number | null
+  total_tokens: number | null
+  error_detail: string | null
+  display_payload: Record<string, unknown> | null
+  client_message_id: string | null
+  attachments: ConversationAttachment[]
+}
+
+export interface CreateConversationRequest {
+  title?: string | null
+}
+
+export interface UpdateConversationRequest {
+  title?: string | null
+  archived?: boolean
+}
+
+export interface CreateMessageRequest {
+  client_message_id?: string | null
+  role: 'user' | 'assistant'
+  content?: string | null
+  mode?: string | null
+  status?: string | null
+  task_type?: string | null
+  routing_model?: string | null
+  actual_model?: string | null
+  rag_used?: boolean | null
+  tools_used?: string | null
+  local_execution?: boolean | null
+  external_calls?: number | null
+  response_time_seconds?: number | null
+  model_inference_seconds?: number | null
+  tokens_per_second?: number | null
+  prompt_tokens?: number | null
+  completion_tokens?: number | null
+  total_tokens?: number | null
+  error_detail?: string | null
+  display_payload?: Record<string, unknown> | null
+  attachments?: Array<Record<string, unknown>>
+}
+
+// ---------------------------------------------------------------------------
 // Judge Mode — Phase 16A backend/judge/service.py + backend/app/api/judge.py
 // ---------------------------------------------------------------------------
 
