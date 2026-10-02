@@ -15,8 +15,6 @@ Covers:
  12. Generic preventive maintenance question routes to GENERAL_QA.
 """
 import json
-import os
-import warnings
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -30,12 +28,15 @@ REPO = __import__("pathlib").Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture(autouse=True)
-def _offline():
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+def _offline(monkeypatch):
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
 
 
-client = TestClient(app)
+@pytest.fixture
+def client():
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +122,7 @@ def test_generic_prompt_does_not_contain_maintenance_reasoning():
 # ---------------------------------------------------------------------------
 # 7. General API — online model returns COMPLETED with actual string answer
 # ---------------------------------------------------------------------------
-def test_general_run_online_returns_completed_with_string_answer():
+def test_general_run_online_returns_completed_with_string_answer(client):
     resp = client.post("/api/general/run", json={"task": "hey", "asset_tag": "", "use_rag": False})
     assert resp.status_code == 200
     data = resp.json()
@@ -135,7 +136,7 @@ def test_general_run_online_returns_completed_with_string_answer():
 # ---------------------------------------------------------------------------
 # 8. General API — RAG query returns evidence and answer when general available
 # ---------------------------------------------------------------------------
-def test_general_run_rag_query_returns_evidence_and_answer():
+def test_general_run_rag_query_returns_evidence_and_answer(client):
     fake_hits = [
         {
             "source_file": "inspection_report.md",
@@ -167,7 +168,7 @@ def test_general_run_rag_query_returns_evidence_and_answer():
 # ---------------------------------------------------------------------------
 # 9. General API — routing metadata is present
 # ---------------------------------------------------------------------------
-def test_general_run_returns_routing_metadata():
+def test_general_run_returns_routing_metadata(client):
     resp = client.post("/api/general/run", json={"task": "summarize this", "asset_tag": "", "use_rag": False})
     assert resp.status_code == 200
     data = resp.json()
@@ -188,7 +189,7 @@ def test_model_status_case_insensitive_availability():
 # ---------------------------------------------------------------------------
 # 11. Online General — actual string answer, not coroutine
 # ---------------------------------------------------------------------------
-def test_general_run_online_returns_completed_with_string_answer():
+def test_general_run_online_returns_completed_with_string_answer(client):
     with patch.object(ModelClient, 'generate_with_metrics', new_callable=AsyncMock, return_value={
         "content": "GENERAL TEST ANSWER",
         "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
@@ -212,7 +213,7 @@ def test_general_run_online_returns_completed_with_string_answer():
 # ---------------------------------------------------------------------------
 # 12. Online RAG + General — evidence + grounded answer
 # ---------------------------------------------------------------------------
-def test_general_run_online_rag_returns_evidence_and_answer():
+def test_general_run_online_rag_returns_evidence_and_answer(client):
     fake_hits = [
         {
             "source_file": "inspection_report.md",

@@ -25,6 +25,7 @@ from app.storage.postgres import (
 )
 import app.api.conversations as conversations_mod
 import app.storage.postgres as postgres_mod
+import app.context.builder as builder_mod
 
 TEST_DB_URL = settings.POSTGRES_URL
 
@@ -43,13 +44,16 @@ async def db_session() -> AsyncSession:
 async def _patch_async_sessions():
     original_postgres = postgres_mod.async_session
     original_conversations = conversations_mod.async_session
+    original_builder = builder_mod.async_session
     postgres_mod.async_session = test_async_session
     conversations_mod.async_session = test_async_session
+    builder_mod.async_session = test_async_session
     try:
         yield
     finally:
         postgres_mod.async_session = original_postgres
         conversations_mod.async_session = original_conversations
+        builder_mod.async_session = original_builder
 
 
 def _make_org(session, org_id: str, name: str = "Test Org") -> Organization:
