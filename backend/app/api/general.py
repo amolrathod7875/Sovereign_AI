@@ -144,6 +144,12 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
         for m in context.recent_messages:
             history_messages.append({"role": m.role, "content": m.content})
 
+    if context and context.summary and context.summary.text:
+        history_messages.insert(0, {
+            "role": "assistant",
+            "content": "[Conversation summary derived from earlier visible messages. Context only; not authoritative organizational evidence.]\n" + context.summary.text,
+        })
+
     try:
         routing = route(RoutingRequest(task=task, asset_tag=req.asset_tag or None)).model_dump()
     except NoLocalModelAvailable as e:
@@ -221,6 +227,15 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
             "truncated": context_usage.truncated,
             "source": context_usage.source,
             "reason": context_usage.reason,
+            "summary_available": context_usage.summary_available,
+            "summary_used": context_usage.summary_used,
+            "summary_refreshed": context_usage.summary_refreshed,
+            "summary_version": context_usage.summary_version,
+            "summarized_through_sequence_no": context_usage.summarized_through_sequence_no,
+            "summary_estimated_tokens": context_usage.summary_estimated_tokens,
+            "recent_messages_included": context_usage.recent_messages_included,
+            "estimated_recent_tokens": context_usage.estimated_recent_tokens,
+            "compression_active": context_usage.compression_active,
         }
 
     response = GeneralRunResponse(

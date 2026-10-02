@@ -332,8 +332,17 @@ export interface ConversationContextUsage {
   messages_included: number
   estimated_history_tokens: number
   truncated: boolean
-  source: 'postgresql_history' | 'none'
+  source: 'postgresql_history' | 'postgresql_summary_and_history' | 'none'
   reason?: string | null
+  summary_available?: boolean
+  summary_used?: boolean
+  summary_refreshed?: boolean
+  summary_version?: number | null
+  summarized_through_sequence_no?: number | null
+  summary_estimated_tokens?: number | null
+  recent_messages_included?: number | null
+  estimated_recent_tokens?: number | null
+  compression_active?: boolean
 }
 
 export interface GeneralRunResponse {

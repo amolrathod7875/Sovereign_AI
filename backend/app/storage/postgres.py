@@ -142,6 +142,28 @@ class Message(Base):
     )
 
 
+class ConversationSummaryRecord(Base):
+    __tablename__ = "conversation_summaries"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    summary_text: Mapped[str] = mapped_column(Text, nullable=False)
+    summarized_through_sequence_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_message_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    estimated_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    model_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("ix_conversation_summaries_org_owner", "organization_id", "owner_user_id"),
+        Index("ix_conversation_summaries_updated_at", "updated_at"),
+    )
+
+
 class MessageAttachment(Base):
     __tablename__ = "message_attachments"
 

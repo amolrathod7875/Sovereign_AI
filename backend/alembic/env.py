@@ -18,6 +18,7 @@ from app.storage.postgres import (
     Conversation,
     Message,
     MessageAttachment,
+    ConversationSummaryRecord,
 )
 
 config = context.config
