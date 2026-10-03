@@ -82,6 +82,16 @@ class MemorySemanticSearch:
         top_k = top_k or self.top_k
         response = MemorySearchResponse(query=query)
 
+        if conversation_id:
+            async with async_session() as session:
+                repo = MemoryRepository(session)
+                conv = await repo.validate_conversation_access(principal, conversation_id)
+            if conv is None:
+                logger.warning("Unauthorized conversation_id in memory search: %s", conversation_id)
+                response.candidate_count = 0
+                response.returned_count = 0
+                return response
+
         if not self.store.collection_exists():
             logger.warning("Memory Qdrant collection %s does not exist", MEMORY_QDRANT_COLLECTION)
             return response

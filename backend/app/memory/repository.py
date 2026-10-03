@@ -217,9 +217,37 @@ class MemoryRepository:
         )
         result = await self.session.execute(stmt)
         memory = result.scalar_one_or_none()
-        if memory and memory.scope == MemoryScope.PERSONAL.value and memory.user_id != principal.user_id:
+        if memory is None:
             return None
+        if memory.scope == MemoryScope.PERSONAL.value and memory.user_id != principal.user_id:
+            return None
+        if memory.scope == MemoryScope.CONVERSATION.value:
+            if memory.user_id != principal.user_id:
+                return None
+            if memory.conversation_id:
+                conv = await self.validate_conversation_access(
+                    principal, memory.conversation_id
+                )
+                if conv is None:
+                    return None
         return memory
+
+    # ------------------------------------------------------------------
+    # Conversation ownership validation
+    # ------------------------------------------------------------------
+    async def validate_conversation_access(
+        self,
+        principal: Principal,
+        conversation_id: str,
+    ) -> Opt[Conversation]:
+        stmt = (
+            select(Conversation)
+            .where(Conversation.id == conversation_id)
+            .where(Conversation.organization_id == principal.organization_id)
+            .where(Conversation.owner_user_id == principal.user_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     # ------------------------------------------------------------------
     # Deactivate memory
