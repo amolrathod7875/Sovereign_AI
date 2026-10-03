@@ -65,6 +65,7 @@ interface ChatMessage {
   externalCalls?: number
   error?: string
   modelPerformance?: ModelPerformanceMetrics | null
+  memoryContext?: { used: boolean; included_count: number; scopes: string[] } | null
 }
 
 const VISION_TYPES = ['pid', 'general', 'document', 'ocr', 'inspection']
@@ -526,6 +527,7 @@ export default function Workbench() {
       ? res.actual_model_execution.join(', ')
       : 'NONE'
     const mp = res.model_performance ?? null
+    const memMeta = res.memory_context ?? null
     return {
       id: `a-${Date.now()}`,
       role: 'assistant',
@@ -555,6 +557,13 @@ export default function Workbench() {
       errors: res.errors,
       externalCalls: res.external_calls,
       modelPerformance: mp,
+      memoryContext: memMeta
+        ? {
+            used: memMeta.used,
+            included_count: memMeta.included_count,
+            scopes: memMeta.scopes ?? [],
+          }
+        : null,
     }
   }
 
@@ -984,6 +993,11 @@ function ExecutionCard({ message }: { message: ChatMessage }) {
     ? `${ex.tokensPerSecond.toFixed(1)} tok/s`
     : null
   const tokens = formatTokens(message.modelPerformance)
+  const memLabel = message.memoryContext
+    ? message.memoryContext.used
+      ? `Memory: ${message.memoryContext.included_count} used`
+      : 'Memory: none used'
+    : null
   return (
     <div className="rounded-lg border border-border bg-background-tertiary p-3 space-y-1.5">
       <Row icon={Clock} label="Response time" value={formatDuration(ex.responseTimeSeconds)} />
@@ -992,6 +1006,7 @@ function ExecutionCard({ message }: { message: ChatMessage }) {
       <Row icon={Cpu} label="Actual execution" value={ex.actualModel} />
       <Row icon={Database} label="RAG" value={ragText} />
       <Row icon={Wrench} label="Tools" value={ex.tools ?? '—'} />
+      {memLabel && <Row icon={Database} label={memLabel.startsWith('Memory:') ? 'Memory' : 'Context'} value={memLabel.split(': ')[1] ?? memLabel} />}
       {speed && <Row icon={Gauge} label="Generation" value={speed} />}
       {!speed && ex.responseTimeSeconds != null && (
         <Row icon={Gauge} label="Generation" value="—" />

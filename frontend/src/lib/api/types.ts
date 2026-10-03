@@ -345,6 +345,33 @@ export interface ConversationContextUsage {
   compression_active?: boolean
 }
 
+export interface MemoryContextUsage {
+  used: boolean
+  available: boolean
+  retrieval_attempted: boolean
+  candidate_count: number
+  eligible_count: number
+  included_count: number
+  estimated_tokens: number
+  truncated: boolean
+  skipped_over_budget: number
+  skipped_duplicate: number
+  skipped_threshold: number
+  memory_ids: string[]
+  scopes: string[]
+  retrieval_mode: string
+  reason: string | null
+  min_semantic_score: number
+}
+
+export interface UnifiedContextUsage {
+  unified_context_budget: number
+  estimated_history_tokens: number
+  estimated_memory_tokens: number
+  estimated_unified_tokens: number
+  budget_remaining: number
+}
+
 export interface GeneralRunResponse {
   status: string
   answer: string | null
@@ -368,6 +395,8 @@ export interface GeneralRunResponse {
   response_time_seconds: number | null
   model_performance: ModelPerformanceMetrics | null
   conversation_context: ConversationContextUsage | null
+  memory_context: MemoryContextUsage | null
+  unified_context: UnifiedContextUsage | null
 }
 
 // ---------------------------------------------------------------------------

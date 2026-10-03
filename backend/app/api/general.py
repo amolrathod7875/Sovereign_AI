@@ -46,6 +46,8 @@ class GeneralRunResponse(BaseModel):
     response_time_seconds: Optional[float] = None
     model_performance: Optional[Dict[str, Any]] = None
     conversation_context: Optional[Dict[str, Any]] = None
+    memory_context: Optional[Dict[str, Any]] = None
+    unified_context: Optional[Dict[str, Any]] = None
 
 
 async def _try_general_synthesis(
@@ -53,7 +55,7 @@ async def _try_general_synthesis(
     evidence: List[Dict[str, Any]],
     max_tokens: int = 1024,
     use_rag: bool = False,
-    history_messages: Optional[List[Dict[str, str]]] = None,
+    context_messages: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """Attempt local general synthesis. Never raises."""
     m = get_model("general")
@@ -78,22 +80,25 @@ async def _try_general_synthesis(
                 "You are Sovereign AI. Answer using ONLY the supplied local evidence. "
                 "If the evidence does not answer the question, state that clearly. "
                 "Preceding conversation messages may be used to resolve references and follow-up "
-                "questions, but they are NOT authoritative organizational evidence."
+                "questions, but they are NOT authoritative organizational evidence. "
+                "Long-term user memory is context only and is NOT organizational evidence."
             )
             ctx = "\n".join(f"- {e.get('text', '')}" for e in evidence[:4]) or "(no retrieved evidence)"
             user = f"Task: {task}\n\nLocal evidence:\n{ctx}"
         else:
             system = (
                 "You are Sovereign AI, a local on-premise assistant. "
-                "Use the preceding conversation messages to resolve references and follow-up questions. "
+                "Use the preceding context messages (long-term memory, conversation summary, recent history) to resolve references and follow-up questions. "
+                "Long-term user memory is context only and is NOT organizational evidence. "
                 "Answer the user's question clearly and accurately. "
+                "Current user request overrides conflicting memory, summary, or history. "
                 "Do not claim access to evidence that was not provided."
             )
             user = task
 
         messages: List[Dict[str, str]] = [{"role": "system", "content": system}]
-        if history_messages:
-            messages.extend(history_messages)
+        if context_messages:
+            messages.extend(context_messages)
         messages.append({"role": "user", "content": user})
 
         client = ModelClient("general", endpoint)
@@ -125,30 +130,27 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
 
     principal: Principal = get_current_principal()
 
-    context = None
-    context_usage = None
+    unified: Optional[UnifiedContext] = None
+    unified_usage: Optional[UnifiedContextUsage] = None
     try:
-        from app.context.builder import build_conversation_context
-        context, context_usage = await build_conversation_context(
+        from app.context.unified_builder import build_unified_context
+        unified, unified_usage = await build_unified_context(
             principal=principal,
+            task=task,
             conversation_id=req.conversation_id,
             current_message_id=req.current_message_id,
+            use_rag=bool(req.use_rag),
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.warning("conversation context build failed: %s", e)
-        context = None
-        context_usage = None
+        logger.warning("unified context build failed: %s", e)
+        unified = None
+        unified_usage = None
 
-    history_messages: List[Dict[str, str]] = []
-    if context and context.recent_messages:
-        for m in context.recent_messages:
-            history_messages.append({"role": m.role, "content": m.content})
-
-    if context and context.summary and context.summary.text:
-        history_messages.insert(0, {
-            "role": "assistant",
-            "content": "[Conversation summary derived from earlier visible messages. Context only; not authoritative organizational evidence.]\n" + context.summary.text,
-        })
+    context_messages: List[Dict[str, str]] = []
+    if unified and unified.model_messages:
+        context_messages = unified.model_messages
 
     try:
         routing = route(RoutingRequest(task=task, asset_tag=req.asset_tag or None)).model_dump()
@@ -158,15 +160,13 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
         logger.warning("routing failed: %s", e)
         routing = {"error": str(e), "selected_model": None, "task_type": "GENERAL_QA", "models_required": [], "requires_rag": False}
 
-    task_type = routing.get("task_type", "GENERAL_QA")
-    use_rag = bool(req.use_rag or routing.get("requires_rag"))
     evidence: List[Dict[str, Any]] = []
     rag_used = False
     actual_execution: List[str] = []
     errors: List[str] = []
 
     with no_network() as guard:
-        if use_rag or task_type == "RAG_QA":
+        if req.use_rag:
             rag_used = True
             try:
                 hits = search_knowledge_base(task, asset_tag=req.asset_tag or None, top_k=6)
@@ -187,9 +187,11 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
             except Exception as e:
                 errors.append(f"RAG retrieval failed: {e}")
                 rag_used = False
+            if not evidence:
+                rag_used = False
 
         synth = await _try_general_synthesis(
-            task, evidence, use_rag=bool(rag_used and len(evidence) > 0), history_messages=history_messages
+            task, evidence, use_rag=bool(rag_used), context_messages=context_messages
         )
         if synth.get("used"):
             actual_execution.append("general")
@@ -205,37 +207,83 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
     response_time_seconds = round(time.perf_counter() - request_started, 3)
     model_performance = synth.get("performance") if synth.get("used") else None
 
-    if context_usage is None and req.conversation_id:
-        context_usage = type("ConversationContextUsage", (), {})()
-        context_usage.conversation_id = req.conversation_id
-        context_usage.history_used = False
-        context_usage.messages_considered = 0
-        context_usage.messages_included = 0
-        context_usage.estimated_history_tokens = 0
-        context_usage.truncated = False
-        context_usage.source = "none"
-        context_usage.reason = "history_unavailable"
+    if unified_usage is None and req.conversation_id:
+        unified_usage = type("UnifiedContextUsage", (), {})()
+        for name, value in {
+            "conversation_id": req.conversation_id,
+            "history_used": False,
+            "messages_considered": 0,
+            "messages_included": 0,
+            "estimated_history_tokens": 0,
+            "truncated": False,
+            "source": "none",
+            "reason": "history_unavailable",
+            "memory_used": False,
+            "memory_available": False,
+            "memory_retrieval_attempted": False,
+            "memory_candidate_count": 0,
+            "memory_eligible_count": 0,
+            "memory_included_count": 0,
+            "memory_estimated_tokens": 0,
+            "memory_truncated": False,
+            "memory_ids": [],
+            "memory_scopes": [],
+            "memory_retrieval_mode": "semantic_memory",
+            "memory_reason": "history_unavailable",
+            "memory_min_score": 0.0,
+        }.items():
+            setattr(unified_usage, name, value)
+        unified_usage.unified_context_budget = settings.UNIFIED_CONTEXT_TOKEN_BUDGET
+        unified_usage.estimated_unified_tokens = 0
+        unified_usage.budget_remaining = settings.UNIFIED_CONTEXT_TOKEN_BUDGET
 
     conversation_context_meta = None
-    if context_usage is not None:
+    memory_context_meta = None
+    unified_context_meta = None
+    if unified_usage is not None:
         conversation_context_meta = {
-            "conversation_id": context_usage.conversation_id,
-            "history_used": context_usage.history_used,
-            "messages_considered": context_usage.messages_considered,
-            "messages_included": context_usage.messages_included,
-            "estimated_history_tokens": context_usage.estimated_history_tokens,
-            "truncated": context_usage.truncated,
-            "source": context_usage.source,
-            "reason": context_usage.reason,
-            "summary_available": context_usage.summary_available,
-            "summary_used": context_usage.summary_used,
-            "summary_refreshed": context_usage.summary_refreshed,
-            "summary_version": context_usage.summary_version,
-            "summarized_through_sequence_no": context_usage.summarized_through_sequence_no,
-            "summary_estimated_tokens": context_usage.summary_estimated_tokens,
-            "recent_messages_included": context_usage.recent_messages_included,
-            "estimated_recent_tokens": context_usage.estimated_recent_tokens,
-            "compression_active": context_usage.compression_active,
+            "conversation_id": unified_usage.conversation_id,
+            "history_used": unified_usage.history_used,
+            "messages_considered": unified_usage.messages_considered,
+            "messages_included": unified_usage.messages_included,
+            "estimated_history_tokens": unified_usage.estimated_history_tokens,
+            "truncated": unified_usage.truncated,
+            "source": unified_usage.source,
+            "reason": unified_usage.reason,
+            "summary_available": unified_usage.summary_available,
+            "summary_used": unified_usage.summary_used,
+            "summary_refreshed": unified_usage.summary_refreshed,
+            "summary_version": unified_usage.summary_version,
+            "summarized_through_sequence_no": unified_usage.summarized_through_sequence_no,
+            "summary_estimated_tokens": unified_usage.summary_estimated_tokens,
+            "recent_messages_included": unified_usage.recent_messages_included,
+            "estimated_recent_tokens": unified_usage.estimated_recent_tokens,
+            "compression_active": unified_usage.compression_active,
+        }
+        memory_context_meta = {
+            "used": unified_usage.memory_used,
+            "available": unified_usage.memory_available,
+            "retrieval_attempted": unified_usage.memory_retrieval_attempted,
+            "candidate_count": unified_usage.memory_candidate_count,
+            "eligible_count": unified_usage.memory_eligible_count,
+            "included_count": unified_usage.memory_included_count,
+            "estimated_tokens": unified_usage.memory_estimated_tokens,
+            "truncated": unified_usage.memory_truncated,
+            "skipped_over_budget": unified.memory_context.skipped_over_budget if unified else 0,
+            "skipped_duplicate": unified.memory_context.skipped_duplicate if unified else 0,
+            "skipped_threshold": unified.memory_context.skipped_threshold if unified else 0,
+            "memory_ids": unified_usage.memory_ids,
+            "scopes": unified_usage.memory_scopes,
+            "retrieval_mode": unified_usage.memory_retrieval_mode,
+            "reason": unified_usage.memory_reason,
+            "min_semantic_score": unified_usage.memory_min_score,
+        }
+        unified_context_meta = {
+            "unified_context_budget": unified_usage.unified_context_budget,
+            "estimated_history_tokens": unified_usage.estimated_history_tokens,
+            "estimated_memory_tokens": unified_usage.estimated_memory_tokens,
+            "estimated_unified_tokens": unified_usage.estimated_unified_tokens,
+            "budget_remaining": unified_usage.budget_remaining,
         }
 
     response = GeneralRunResponse(
@@ -251,5 +299,7 @@ async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
         response_time_seconds=response_time_seconds,
         model_performance=model_performance,
         conversation_context=conversation_context_meta,
+        memory_context=memory_context_meta,
+        unified_context=unified_context_meta,
     )
     return response.model_dump()

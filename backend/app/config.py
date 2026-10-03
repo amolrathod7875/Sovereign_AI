@@ -98,6 +98,12 @@ class Settings(BaseSettings):
     MEMORY_OUTBOX_MAX_ATTEMPTS: int = 5
     MEMORY_OUTBOX_PROCESSING_TIMEOUT_SECONDS: int = 300
 
+    # M6 unified memory-aware context (Phase M6 — General/RAG orchestration)
+    UNIFIED_CONTEXT_TOKEN_BUDGET: int = 650
+    MEMORY_CONTEXT_TOKEN_BUDGET: int = 150
+    MEMORY_CONTEXT_TOP_K: int = 3
+    MEMORY_CONTEXT_MIN_SEMANTIC_SCORE: float = 0.35
+
     MAX_FILE_MB: int = 50
     SANDBOX_TIMEOUT_SECONDS: int = 10
     MAX_OUTPUT_KB: int = 256
