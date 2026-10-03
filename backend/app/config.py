@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     CONVERSATION_SUMMARY_REFRESH_MIN_MESSAGES: int = 6
     CONVERSATION_SUMMARY_MAX_TOKENS: int = 220
 
+    # M4 canonical long-term memory (Phase M4 — PostgreSQL durable memory)
+    MEMORY_MIN_IMPORTANCE: float = 0.60
+    MEMORY_MIN_CONFIDENCE: float = 0.75
+    MEMORY_MAX_CANDIDATES_PER_TURN: int = 3
+    MEMORY_CONTENT_MAX_LENGTH: int = 1000
+
     MAX_FILE_MB: int = 50
     SANDBOX_TIMEOUT_SECONDS: int = 10
     MAX_OUTPUT_KB: int = 256

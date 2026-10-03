@@ -429,3 +429,78 @@ async def log_network_event(event_id: str, destination_host: str, destination_po
     async with async_session() as session:
         session.add(event)
         await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# M4 long-term conversation memory (canonical PostgreSQL layer)
+# ---------------------------------------------------------------------------
+
+class ConversationMemory(Base):
+    __tablename__ = "conversation_memories"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    conversation_id: Mapped[Optional[str]] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True)
+    scope: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    memory_type: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_content: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    importance: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    source_message_id: Mapped[Optional[str]] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    source_conversation_id: Mapped[Optional[str]] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    supersedes_memory_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "user_id",
+            "conversation_id",
+            "scope",
+            "memory_type",
+            "normalized_content",
+            name="uq_memory_dedup",
+        ),
+        Index("ix_memory_org_user", "organization_id", "user_id"),
+        Index("ix_memory_org_conv", "organization_id", "conversation_id"),
+        Index("ix_memory_scope_type", "scope", "memory_type"),
+        Index("ix_memory_active", "active"),
+    )
+
+
+class MemoryProvenance(Base):
+    __tablename__ = "memory_provenance"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    memory_id: Mapped[str] = mapped_column(ForeignKey("conversation_memories.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_message_id: Mapped[Optional[str]] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    source_conversation_id: Mapped[Optional[str]] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("memory_id", "source_message_id", name="uq_memory_provenance_message"),
+        UniqueConstraint("memory_id", "source_conversation_id", name="uq_memory_provenance_conversation"),
+        Index("ix_provenance_memory", "memory_id"),
+    )
+
+
+class MemoryIndexOutbox(Base):
+    __tablename__ = "memory_index_outbox"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    memory_id: Mapped[str] = mapped_column(ForeignKey("conversation_memories.id", ondelete="CASCADE"), nullable=False, index=True)
+    operation: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="PENDING", index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

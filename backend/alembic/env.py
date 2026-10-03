@@ -19,6 +19,9 @@ from app.storage.postgres import (
     Message,
     MessageAttachment,
     ConversationSummaryRecord,
+    ConversationMemory,
+    MemoryProvenance,
+    MemoryIndexOutbox,
 )
 
 config = context.config

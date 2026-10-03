@@ -23,6 +23,7 @@ from app.api import (
     judge,
     general,
     conversations,
+    memory,
 )
 from app.storage.postgres import init_db, ensure_dev_principal
 from app.storage.qdrant import init_qdrant
@@ -85,6 +86,7 @@ app.include_router(receipts.router, prefix="/api/receipts", tags=["receipts"])
 app.include_router(receipt_chain.router, prefix="/api/receipt-chain", tags=["receipt-chain"])
 app.include_router(judge.router, prefix="/api/judge", tags=["judge"])
 app.include_router(general.router, prefix="/api/general", tags=["general"])
+app.include_router(memory.router, prefix="/api/memory", tags=["memory"])
 
 
 @app.get("/")
