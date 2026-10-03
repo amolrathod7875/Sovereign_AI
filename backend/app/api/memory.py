@@ -21,6 +21,7 @@ from app.identity.principal import get_current_principal, Principal
 from app.memory.schemas import MemoryScope, MemoryType
 from app.memory.service import MemoryService
 from app.memory.repository import MemoryRepository
+from app.memory.search import MemorySemanticSearch, MemorySearchResponse
 from app.storage.postgres import (
     async_session,
     Message,
@@ -70,6 +71,35 @@ class ExtractTurnResponse(BaseModel):
     superseded: int = 0
     rejected: int = 0
     reason: Optional[str] = None
+
+
+class MemorySearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=1024)
+    conversation_id: Optional[str] = None
+    top_k: int = Field(5, ge=1, le=20)
+
+
+class MemorySearchResultResponse(BaseModel):
+    memory_id: str
+    content: str
+    scope: str
+    memory_type: str
+    semantic_score: float
+    importance: float
+    confidence: float
+    conversation_id: Optional[str] = None
+    version: int = 1
+    updated_at: Optional[str] = None
+
+
+class MemorySearchResponseModel(BaseModel):
+    query: str
+    results: List[MemorySearchResultResponse] = Field(default_factory=list)
+    index: str = "sovereign_memory"
+    retrieval_mode: str = "semantic_memory"
+    embedding_local: bool = True
+    candidate_count: int = 0
+    returned_count: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -220,4 +250,49 @@ async def extract_turn(
         deduped=summary.get("deduped", 0),
         superseded=summary.get("superseded", 0),
         rejected=summary.get("rejected", 0),
+    )
+
+
+@router.post("/search", response_model=MemorySearchResponseModel)
+async def search_memories(
+    req: MemorySearchRequest,
+    principal: Principal = Depends(get_current_principal),
+):
+    """Semantic memory search (M5 local Qdrant index + PostgreSQL canonical validation).
+
+    M5 does not inject memories into model prompts. This endpoint only proves
+    semantic retrieval exists. No General LLM generation is invoked.
+    """
+    search_service = MemorySemanticSearch()
+    try:
+        response = await search_service.search_memories(
+            principal=principal,
+            query=req.query,
+            conversation_id=req.conversation_id,
+            top_k=req.top_k,
+        )
+    finally:
+        await search_service.close()
+    return MemorySearchResponseModel(
+        query=response.query,
+        results=[
+            MemorySearchResultResponse(
+                memory_id=r.memory_id,
+                content=r.content,
+                scope=r.scope,
+                memory_type=r.memory_type,
+                semantic_score=r.semantic_score,
+                importance=r.importance,
+                confidence=r.confidence,
+                conversation_id=r.conversation_id,
+                version=r.version,
+                updated_at=r.updated_at,
+            )
+            for r in response.results
+        ],
+        index=response.index,
+        retrieval_mode=response.retrieval_mode,
+        embedding_local=response.embedding_local,
+        candidate_count=response.candidate_count,
+        returned_count=response.returned_count,
     )

@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     VISION_N_GPU_LAYERS: int = 99
     VISION_N_CTX: int = 2048
 
-    EMBEDDING_MODEL: str = "/models/embedding"
+    EMBEDDING_MODEL: str = str(_REPO_ROOT / "models" / "embeddings" / "all-MiniLM-L6-v2")
     RERANKER_MODEL: str = "/models/reranker"
 
     PISTON_URL: str = "http://piston:2000"
@@ -88,6 +88,16 @@ class Settings(BaseSettings):
     MEMORY_MAX_CANDIDATES_PER_TURN: int = 3
     MEMORY_CONTENT_MAX_LENGTH: int = 1000
 
+    # M5 semantic memory index (Phase M5 — local embedded Qdrant index)
+    MEMORY_QDRANT_PATH: str = str(_REPO_ROOT / "data" / "memory" / "qdrant_db")
+    MEMORY_QDRANT_COLLECTION: str = "sovereign_memory"
+    MEMORY_EMBEDDING_DIM: int = 384
+    MEMORY_SEARCH_DEFAULT_TOP_K: int = 5
+    MEMORY_SEARCH_CANDIDATE_MULTIPLIER: int = 4
+    MEMORY_OUTBOX_BATCH_SIZE: int = 25
+    MEMORY_OUTBOX_MAX_ATTEMPTS: int = 5
+    MEMORY_OUTBOX_PROCESSING_TIMEOUT_SECONDS: int = 300
+
     MAX_FILE_MB: int = 50
     SANDBOX_TIMEOUT_SECONDS: int = 10
     MAX_OUTPUT_KB: int = 256
@@ -97,7 +107,7 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
 
     class Config:
-        env_file = ".env"
+        env_file = str(_REPO_ROOT / "backend" / ".env")
         case_sensitive = True
 
 
