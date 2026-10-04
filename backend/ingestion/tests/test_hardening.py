@@ -1,9 +1,15 @@
 import pytest
 import os
 from pathlib import Path
-from app.ingestion import process_project
 
-def test_empty_file(tmp_path):
+
+@pytest.fixture(scope="module")
+def process_project(ingestion_app):
+    from app.ingestion import process_project
+    return process_project
+
+
+def test_empty_file(tmp_path, process_project):
     project_dir = tmp_path / "TestEmpty"
     project_dir.mkdir()
     empty_file = project_dir / "empty.txt"
@@ -15,7 +21,7 @@ def test_empty_file(tmp_path):
     assert stats["failed"] == 1
     assert "EMPTY_FILE" in stats["files"][0]["error"]
 
-def test_large_file(tmp_path, monkeypatch):
+def test_large_file(tmp_path, monkeypatch, process_project):
     import app.ingestion
     monkeypatch.setattr(app.ingestion, "MAX_FILE_SIZE_BYTES", 10)
     
@@ -30,7 +36,7 @@ def test_large_file(tmp_path, monkeypatch):
     assert stats["failed"] == 1
     assert "FILE_TOO_LARGE" in stats["files"][0]["error"]
 
-def test_extraction_validation(tmp_path, monkeypatch):
+def test_extraction_validation(tmp_path, monkeypatch, process_project):
     import app.parsers
     
     def fake_parse(filepath, parser_name):

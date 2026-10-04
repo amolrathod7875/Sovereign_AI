@@ -2,10 +2,17 @@ import os
 import json
 import pytest
 from pathlib import Path
-from app.ingestion import get_sha256, generate_document_id
-from app.models import Document
 
-def test_hashing_and_document_id(tmp_path):
+
+@pytest.fixture(scope="module")
+def ingestion_helpers(ingestion_app):
+    from app.ingestion import get_sha256, generate_document_id
+    from app.models import Document
+    return get_sha256, generate_document_id, Document
+
+
+def test_hashing_and_document_id(tmp_path, ingestion_helpers):
+    get_sha256, generate_document_id, Document = ingestion_helpers
     test_file = tmp_path / "test.txt"
     test_file.write_text("Sovereign AI Test File")
     
@@ -18,7 +25,8 @@ def test_hashing_and_document_id(tmp_path):
     assert doc_id.startswith("DOC-")
     assert len(doc_id) == 16 # "DOC-" (4) + 12 chars
     
-def test_pydantic_validation():
+def test_pydantic_validation(ingestion_helpers):
+    get_sha256, generate_document_id, Document = ingestion_helpers
     # Test valid
     valid_data = {
         "document_id": "DOC-ABC123456789",

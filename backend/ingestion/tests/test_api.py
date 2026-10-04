@@ -1,15 +1,18 @@
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app
 
-client = TestClient(app)
 
-def test_api_health():
+@pytest.fixture(scope="module")
+def client(ingestion_app):
+    return TestClient(ingestion_app)
+
+
+def test_api_health(client):
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "mode": "LOCAL_ONLY"}
 
-def test_path_traversal_protection():
+def test_path_traversal_protection(client):
     # Test path traversal attempts
     bad_paths = [
         "../file.pdf",
@@ -27,7 +30,7 @@ def test_path_traversal_protection():
         assert response.status_code == 400
         assert "Invalid path" in response.text or "Path traversal" in response.text
 
-def test_normal_upload():
+def test_normal_upload(client):
     files = {"files": ("test.txt", b"content", "text/plain")}
     data = {"paths": ["valid/path/test.txt"]}
     response = client.post("/api/ingest", files=files, data=data)
