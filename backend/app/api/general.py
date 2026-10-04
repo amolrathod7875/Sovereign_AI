@@ -9,7 +9,8 @@ POST /api/general/run
   * RAG_QA     -> hybrid retrieval + local general synthesis (if available)
 """
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi import Request
 import logging
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
@@ -17,7 +18,7 @@ from pydantic import BaseModel
 from app.schemas import RoutingDecision
 from app.models.router import route, RoutingRequest, NoLocalModelAvailable
 from app.models.registry import get_model, is_local_endpoint
-from app.identity.principal import get_current_principal, Principal
+from app.identity.principal import get_current_principal, get_current_principal_dep, Principal
 from agent.tools.search_kb import search_knowledge_base
 from agent.security.netguard import no_network
 
@@ -121,14 +122,16 @@ async def _try_general_synthesis(
 
 
 @router.post("/run", response_model=GeneralRunResponse)
-async def run_general(req: GeneralRunRequest) -> Dict[str, Any]:
+async def run_general(
+    req: GeneralRunRequest,
+    request: Request,
+    principal: Principal = Depends(get_current_principal_dep),
+) -> Dict[str, Any]:
     task = (req.task or "").strip()
     if not task:
         raise HTTPException(status_code=422, detail="task must not be empty")
 
     request_started = time.perf_counter()
-
-    principal: Principal = get_current_principal()
 
     unified: Optional[UnifiedContext] = None
     unified_usage: Optional[UnifiedContextUsage] = None

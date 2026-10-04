@@ -72,6 +72,19 @@ class Settings(BaseSettings):
     SOVEREIGN_DEV_USER_ID: str = "00000000-0000-0000-0000-000000000002"
     SOVEREIGN_DEV_DISPLAY_NAME: str = "Local Development User"
 
+    # A1A authentication mode.
+    AUTH_MODE: str = "development"
+    AUTH_ORGANIZATION_HEADER: str = "X-Sovereign-Organization"
+
+    # OIDC configuration (required when AUTH_MODE=oidc).
+    OIDC_ISSUER: str = ""
+    OIDC_AUDIENCE: str = ""
+    OIDC_JWKS_URL: str = ""
+    OIDC_JWKS_FILE: str = ""
+    OIDC_ALLOWED_ALGORITHMS: str = "RS256"
+    OIDC_CLOCK_SKEW_SECONDS: int = 30
+    OIDC_JWKS_CACHE_TTL_SECONDS: int = 600
+
     # M2 dynamic conversation context (Phase M2 — PostgreSQL history)
     CONVERSATION_CONTEXT_MAX_MESSAGES: int = 20
     CONVERSATION_CONTEXT_TOKEN_BUDGET: int = 500

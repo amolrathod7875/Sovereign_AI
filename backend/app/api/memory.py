@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, func, desc
 
 from app.config import settings
-from app.identity.principal import get_current_principal, Principal
+from app.identity.principal import Principal, get_current_principal_dep
 from app.memory.schemas import MemoryScope, MemoryType
 from app.memory.service import MemoryService
 from app.memory.repository import MemoryRepository
@@ -124,7 +124,7 @@ async def list_memories(
     memory_type: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    principal: Principal = Depends(get_current_principal),
+    principal: Principal = Depends(get_current_principal_dep),
 ):
     """List active memories for the current principal."""
     scope = _q(scope)
@@ -168,7 +168,7 @@ async def list_memories(
 @router.get("/{memory_id}", response_model=MemoryResponse)
 async def get_memory(
     memory_id: str,
-    principal: Principal = Depends(get_current_principal),
+    principal: Principal = Depends(get_current_principal_dep),
 ):
     """Get a single memory by ID."""
     async with async_session() as session:
@@ -197,7 +197,7 @@ async def get_memory(
 @router.delete("/{memory_id}", response_model=dict)
 async def delete_memory(
     memory_id: str,
-    principal: Principal = Depends(get_current_principal),
+    principal: Principal = Depends(get_current_principal_dep),
 ):
     """Deactivate a memory (soft delete)."""
     async with async_session() as session:
@@ -212,7 +212,7 @@ async def delete_memory(
 @router.post("/extract-turn", response_model=ExtractTurnResponse)
 async def extract_turn(
     req: ExtractTurnRequest,
-    principal: Principal = Depends(get_current_principal),
+    principal: Principal = Depends(get_current_principal_dep),
 ):
     """Manually trigger memory extraction for a completed turn.
 
@@ -256,7 +256,7 @@ async def extract_turn(
 @router.post("/search", response_model=MemorySearchResponseModel)
 async def search_memories(
     req: MemorySearchRequest,
-    principal: Principal = Depends(get_current_principal),
+    principal: Principal = Depends(get_current_principal_dep),
 ):
     """Semantic memory search (M5 local Qdrant index + PostgreSQL canonical validation).
 

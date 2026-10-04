@@ -25,6 +25,7 @@ from app.api import (
     conversations,
     memory,
 )
+from app.api import auth as auth_api
 from app.storage.postgres import init_db, ensure_dev_principal
 from app.storage.qdrant import init_qdrant
 
@@ -63,7 +64,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Accept"],
+    allow_headers=["Content-Type", "Accept", "Authorization", "X-Sovereign-Organization"],
     expose_headers=["Content-Disposition"],
 )
 
@@ -87,6 +88,7 @@ app.include_router(receipt_chain.router, prefix="/api/receipt-chain", tags=["rec
 app.include_router(judge.router, prefix="/api/judge", tags=["judge"])
 app.include_router(general.router, prefix="/api/general", tags=["general"])
 app.include_router(memory.router, prefix="/api/memory", tags=["memory"])
+app.include_router(auth_api.router, prefix="/api", tags=["auth"])
 
 
 @app.get("/")
@@ -96,6 +98,7 @@ async def root():
         "version": "1.0.0",
         "status": "running",
         "sovereign_mode": settings.SOVEREIGN_MODE,
+        "auth_mode": settings.AUTH_MODE,
     }
 
 

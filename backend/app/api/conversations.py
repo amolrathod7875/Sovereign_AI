@@ -3,13 +3,13 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.identity.principal import get_current_principal, Principal
+from app.identity.principal import Principal, get_current_principal, get_current_principal_dep
 from app.storage.postgres import (
     async_session,
     Organization,
@@ -139,8 +139,8 @@ def _iso(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat() if dt else None
 
 
-async def _get_principal() -> Principal:
-    return get_current_principal()
+async def _get_principal(request: Request) -> Principal:
+    return await get_current_principal_dep(request)
 
 
 async def _check_db() -> None:
