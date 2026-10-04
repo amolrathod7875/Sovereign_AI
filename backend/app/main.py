@@ -68,6 +68,12 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
+# A1A.1 global OIDC authentication boundary.
+# In OIDC mode every /api route is authenticated by default.
+# In development mode requests pass through untouched.
+from app.auth.middleware import AuthenticationMiddleware
+app.add_middleware(AuthenticationMiddleware)
+
 # NOTE: `chat` must not declare /agent/run — the authoritative agent router below
 # owns that path (see app/api/chat.py header).
 app.include_router(chat.router, prefix="/api", tags=["chat"])
