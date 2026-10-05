@@ -3,6 +3,12 @@
 Provides:
 1. Global authentication middleware that enforces OIDC auth on sensitive routes.
 2. FastAPI dependency that reuses the principal resolved by the middleware.
+
+Path classifications:
+  PUBLIC        no token required
+  TOKEN_ONLY    valid JWT required, issuer/sub validated, user mapped checked,
+                memberships available — organization NOT selected yet
+  FULL_PRINCIPAL valid JWT + active mapped user + selected organization membership
 """
 from __future__ import annotations
 
@@ -10,28 +16,40 @@ import logging
 from typing import Optional
 
 from fastapi import HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.auth.jwt_validator import JWTValidationError, jwt_validator
 from app.auth.resolver import PrincipalResolutionError, PrincipalResolver
 from app.config import settings
 from app.identity.principal import Principal, get_dev_principal
+from app.storage.postgres import User
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Public allowlist (minimal)
+# Public / token-only allowlists
 # ---------------------------------------------------------------------------
 
 _PUBLIC_PATHS: set[str] = {
     "/",
     "/api/system/health",
+    "/api/auth/config",
+}
+
+_TOKEN_ONLY_PATHS: set[str] = {
+    "/api/auth/bootstrap",
 }
 
 
 def _is_public_path(path: str) -> bool:
     return path in _PUBLIC_PATHS
+
+
+def _is_token_only_path(path: str) -> bool:
+    return path in _TOKEN_ONLY_PATHS
 
 
 # ---------------------------------------------------------------------------
@@ -46,11 +64,11 @@ class AuthenticationMiddleware:
 
     In AUTH_MODE=oidc:
       * OPTIONS requests bypass auth (CORS preflight).
-      * Requests to the minimal public allowlist bypass auth.
+      * PUBLIC paths bypass auth.
+      * TOKEN_ONLY paths require a valid Bearer JWT and mapped active user,
+        but do NOT require organization selection.
+      * FULL_PRINCIPAL paths (default for /api) require valid JWT + org selection.
       * Non-/api paths (docs, static files) are allowed through.
-      * Every other /api request must carry a valid Authorization: Bearer JWT.
-      * On success the resolved Principal is stored on request.state.principal.
-      * On failure a 401/403 JSON response is returned immediately.
     """
 
     def __init__(self, app) -> None:
@@ -71,6 +89,7 @@ class AuthenticationMiddleware:
 
         # Unknown mode: hard fail rather than silently allowing traffic.
         if mode != "oidc":
+            from fastapi.responses import JSONResponse
             response = JSONResponse(
                 status_code=500,
                 content={"detail": f"Unknown AUTH_MODE: {mode}"},
@@ -90,12 +109,29 @@ class AuthenticationMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # Token-only paths: validate JWT + mapped user, no org required.
+        if _is_token_only_path(path):
+            if not await self._require_token_only(request, scope, receive, send):
+                return
+            await self.app(scope, receive, send)
+            return
+
         # Non-API paths (static files, docs, etc.) are allowed through.
         if not path.startswith("/api"):
             await self.app(scope, receive, send)
             return
 
-        # Extract bearer token.
+        # Default: full principal required (JWT + org selection).
+        if not await self._require_full_principal(request, scope, receive, send):
+            return
+        await self.app(scope, receive, send)
+
+    async def _require_token_only(self, request: Request, scope, receive, send) -> bool:
+        """Validate Bearer JWT and mapped active user; store minimal identity.
+
+        Does NOT require organization selection.
+        Returns True if the request should continue to the app.
+        """
         auth = request.headers.get("authorization", "").strip()
         if not auth or not auth.lower().startswith("bearer "):
             response = JSONResponse(
@@ -104,7 +140,7 @@ class AuthenticationMiddleware:
                 content={"detail": "Missing bearer token"},
             )
             await response(scope, receive, send)
-            return
+            return False
 
         token = auth[7:].strip()
         if not token:
@@ -114,9 +150,8 @@ class AuthenticationMiddleware:
                 content={"detail": "Missing bearer token"},
             )
             await response(scope, receive, send)
-            return
+            return False
 
-        # Validate JWT.
         try:
             payload = jwt_validator.validate(token)
         except Exception as exc:
@@ -127,7 +162,7 @@ class AuthenticationMiddleware:
                 content={"detail": f"Invalid token: {exc}"},
             )
             await response(scope, receive, send)
-            return
+            return False
 
         issuer = payload.get("iss", "")
         subject = payload.get("sub", "")
@@ -138,9 +173,92 @@ class AuthenticationMiddleware:
                 content={"detail": "Token missing required claims"},
             )
             await response(scope, receive, send)
-            return
+            return False
 
-        # Resolve principal from PostgreSQL.
+        canonical_key = f"{issuer}|{subject}"
+
+        from app.storage.postgres import async_session
+        session: AsyncSession = async_session()
+        if session is None:
+            response = JSONResponse(
+                status_code=503,
+                content={"detail": "Database unavailable"},
+            )
+            await response(scope, receive, send)
+            return False
+
+        try:
+            stmt = select(User).where(User.external_subject == canonical_key, User.active.is_(True))
+            result = await session.execute(stmt)
+            user = result.scalar_one_or_none()
+        finally:
+            await session.close()
+
+        if user is None:
+            response = JSONResponse(
+                status_code=403,
+                content={"detail": "Unknown or inactive user"},
+            )
+            await response(scope, receive, send)
+            return False
+
+        request.state.authenticated_identity = {
+            "issuer": issuer,
+            "subject": subject,
+            "user_id": user.id,
+            "display_name": user.display_name,
+            "email": user.email,
+        }
+        return True
+
+    async def _require_full_principal(self, request: Request, scope, receive, send) -> bool:
+        """Validate Bearer JWT and resolve full Principal including organization.
+
+        Returns True if the request should continue to the app.
+        """
+        auth = request.headers.get("authorization", "").strip()
+        if not auth or not auth.lower().startswith("bearer "):
+            response = JSONResponse(
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+                content={"detail": "Missing bearer token"},
+            )
+            await response(scope, receive, send)
+            return False
+
+        token = auth[7:].strip()
+        if not token:
+            response = JSONResponse(
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+                content={"detail": "Missing bearer token"},
+            )
+            await response(scope, receive, send)
+            return False
+
+        try:
+            payload = jwt_validator.validate(token)
+        except Exception as exc:
+            logger.warning("JWT validation failed: %s", exc)
+            response = JSONResponse(
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+                content={"detail": f"Invalid token: {exc}"},
+            )
+            await response(scope, receive, send)
+            return False
+
+        issuer = payload.get("iss", "")
+        subject = payload.get("sub", "")
+        if not issuer or not subject:
+            response = JSONResponse(
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+                content={"detail": "Token missing required claims"},
+            )
+            await response(scope, receive, send)
+            return False
+
         org_header = settings.AUTH_ORGANIZATION_HEADER.strip()
         requested_org_id = request.headers.get(org_header, "").strip() or None
 
@@ -152,7 +270,7 @@ class AuthenticationMiddleware:
                 content={"detail": "Database unavailable"},
             )
             await response(scope, receive, send)
-            return
+            return False
 
         resolver = PrincipalResolver(session, issuer, subject)
         if requested_org_id:
@@ -167,20 +285,17 @@ class AuthenticationMiddleware:
                 content={"detail": str(exc)},
             )
             await response(scope, receive, send)
-            return
+            return False
         finally:
             await session.close()
 
-        # Attach principal to request state for downstream dependencies.
         request.state.principal = principal
-
-        await self.app(scope, receive, send)
+        return True
 
 
 # ---------------------------------------------------------------------------
 # FastAPI dependency
 # ---------------------------------------------------------------------------
-
 
 async def get_current_principal_dep(request: Request) -> Principal:
     """FastAPI dependency that returns the current principal.
@@ -200,10 +315,3 @@ async def get_current_principal_dep(request: Request) -> Principal:
         raise HTTPException(status_code=401, detail="Missing bearer token")
 
     return get_dev_principal()
-
-
-# ---------------------------------------------------------------------------
-# Imports delayed to avoid circular imports at module load time.
-# ---------------------------------------------------------------------------
-
-from fastapi.responses import JSONResponse  # noqa: E402

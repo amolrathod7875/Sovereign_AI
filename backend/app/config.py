@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     OIDC_CLOCK_SKEW_SECONDS: int = 30
     OIDC_JWKS_CACHE_TTL_SECONDS: int = 600
 
+    # A1B frontend OIDC configuration (public — no secret).
+    OIDC_CLIENT_ID: str = ""
+    OIDC_FRONTEND_SCOPES: str = "openid profile email"
+
     # M2 dynamic conversation context (Phase M2 — PostgreSQL history)
     CONVERSATION_CONTEXT_MAX_MESSAGES: int = 20
     CONVERSATION_CONTEXT_TOKEN_BUDGET: int = 500

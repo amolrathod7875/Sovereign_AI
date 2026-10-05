@@ -41,6 +41,22 @@ export default function Artifacts() {
     }
   }, [])
 
+  async function handleDownload(artifactId: string, filename: string) {
+    try {
+      const { blob } = await apiClient.downloadArtifact(artifactId)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.detail : 'Download failed')
+    }
+  }
+
   return (
     <div className="bg-background-secondary rounded-lg border border-border">
       <div className="p-4 border-b border-border flex items-center justify-between">
@@ -72,13 +88,14 @@ export default function Artifacts() {
                   </p>
                 </div>
               </div>
-              <a
-                href={apiClient.artifactDownloadUrl(a.artifact_id)}
+              <button
+                type="button"
+                onClick={() => handleDownload(a.artifact_id, a.filename)}
                 className="p-2 rounded-md hover:bg-background-tertiary text-text-secondary"
                 aria-label={`Download ${a.filename}`}
               >
                 <Download className="w-4 h-4" />
-              </a>
+              </button>
             </div>
           )
         })}

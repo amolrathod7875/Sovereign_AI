@@ -11,9 +11,12 @@ import {
   Settings,
   Shield,
   ShieldCheck,
+  LogOut,
+  User,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useSystemStore, summarizeModels } from '../../lib/store'
+import { useAuth } from '../../auth/AuthProvider'
 
 const navItems = [
   { path: '/workbench', label: 'AI Workbench', icon: MessageSquare },
@@ -33,6 +36,7 @@ export default function Layout() {
   const models = useSystemStore((s) => s.models)
   const error = useSystemStore((s) => s.error)
   const startPolling = useSystemStore((s) => s.startPolling)
+  const { authMode, authMe, logout, selectedOrgId, memberships, switchOrganization } = useAuth()
 
   useEffect(() => {
     const stop = startPolling(15000)
@@ -40,11 +44,13 @@ export default function Layout() {
   }, [startPolling])
 
   const modelSummary = summarizeModels(models, status?.components)
-  // Real external-call count from the backend probe (never asserted as 0).
   const externalCalls = status?.external_api_calls ?? 0
   const backendUp = !error && status !== null
   const localLabel = backendUp ? 'LOCAL ONLY' : 'BACKEND OFFLINE'
   const localTone = backendUp ? 'bg-accent-sovereign' : 'bg-accent-danger'
+
+  const currentMembership = memberships.find((m) => m.organization_id === selectedOrgId)
+  const displayName = authMe?.display_name || authMode === 'oidc' ? 'User' : undefined
 
   return (
     <div className="flex h-screen bg-background-primary">
@@ -92,6 +98,44 @@ export default function Layout() {
             </p>
           )}
         </div>
+
+        {/* User identity */}
+        {authMode === 'oidc' && displayName && (
+          <div className="p-4 border-t border-border space-y-2">
+            <div className="flex items-center gap-2 text-xs">
+              <User className="w-3 h-3 text-text-secondary" />
+              <span className="text-text-primary truncate">{displayName}</span>
+            </div>
+            {currentMembership && (
+              <div className="text-[10px] text-text-secondary">
+                <span className="truncate block">{currentMembership.organization_name}</span>
+                <span className="capitalize">{currentMembership.role}</span>
+              </div>
+            )}
+            {memberships.length > 1 && (
+              <select
+                value={selectedOrgId ?? ''}
+                onChange={(e) => {
+                  if (e.target.value) switchOrganization(e.target.value)
+                }}
+                className="w-full bg-background-tertiary border border-border rounded px-1 py-0.5 text-[10px] text-text-primary"
+              >
+                {memberships.map((m) => (
+                  <option key={m.organization_id} value={m.organization_id}>
+                    {m.organization_name} ({m.role})
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              type="button"
+              onClick={logout}
+              className="flex items-center gap-1 text-[10px] text-text-secondary hover:text-text-primary"
+            >
+              <LogOut className="w-3 h-3" /> Sign out
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Main Content */}

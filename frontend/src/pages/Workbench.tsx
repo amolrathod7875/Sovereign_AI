@@ -1156,17 +1156,41 @@ function CoderFiles({ files, test }: { files: Record<string, string>; test?: Cod
 }
 
 function ArtifactRow({ artifact }: { artifact: { id: string; name: string; kind: string } }) {
+  const [downloading, setDownloading] = useState(false)
+
+  async function handleDownload() {
+    if (!artifact.id || downloading) return
+    setDownloading(true)
+    try {
+      const { blob } = await apiClient.downloadArtifact(artifact.id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = artifact.name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      // handled by global error state in parent
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   if (artifact.id) {
     return (
-      <a
-        href={apiClient.artifactDownloadUrl(artifact.id)}
-        className="inline-flex items-center gap-2 px-3 py-1.5 bg-accent-success/10 border border-accent-success/30 rounded-lg text-xs text-accent-success hover:underline"
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={downloading}
+        className="inline-flex items-center gap-2 px-3 py-1.5 bg-accent-success/10 border border-accent-success/30 rounded-lg text-xs text-accent-success hover:underline disabled:opacity-50"
       >
         <FileText className="w-3.5 h-3.5" />
         {artifact.name}
         <span className="text-[10px] opacity-70">{artifact.kind}</span>
-        <Download />
-      </a>
+        <DownloadLabel />
+      </button>
     )
   }
   return (
@@ -1178,6 +1202,6 @@ function ArtifactRow({ artifact }: { artifact: { id: string; name: string; kind:
   )
 }
 
-function Download() {
+function DownloadLabel() {
   return <span className="text-[10px] underline">Download</span>
 }

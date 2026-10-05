@@ -299,18 +299,22 @@ class TestRouteEnumeration:
 
 
 class TestDevelopmentMode:
+    @pytest.mark.asyncio
     async def test_root_accessible(self, development_client):
         response = development_client.get("/")
         assert response.status_code == 200
 
+    @pytest.mark.asyncio
     async def test_health_accessible(self, development_client):
         response = development_client.get("/api/system/health")
         assert response.status_code == 200
 
+    @pytest.mark.asyncio
     async def test_general_accessible_without_token(self, development_client):
         response = development_client.post("/api/general/run", json={"task": "ping"})
         assert response.status_code != 401
 
+    @pytest.mark.asyncio
     async def test_auth_me_returns_dev_principal(self, development_client):
         response = development_client.get("/api/auth/me")
         assert response.status_code == 200
@@ -318,123 +322,151 @@ class TestDevelopmentMode:
         assert data["authenticated"] is False
         assert data["source"] == "local_development"
 
+    @pytest.mark.asyncio
     async def test_options_bypasses_auth(self, development_client):
         response = development_client.options("/api/general/run", headers={})
         assert response.status_code in (200, 204, 405)
 
 
 class TestOIDCModePublicRoutes:
+    @pytest.mark.asyncio
     async def test_root_public(self, oidc_client):
         response = oidc_client.get("/")
         assert response.status_code == 200
 
+    @pytest.mark.asyncio
     async def test_health_public(self, oidc_client):
         response = oidc_client.get("/api/system/health")
         assert response.status_code == 200
         data = response.json()
         assert "status" in data
 
+    @pytest.mark.asyncio
     async def test_options_bypasses_auth(self, oidc_client):
         response = oidc_client.options("/api/general/run", headers={})
         assert response.status_code in (200, 204, 405)
 
+    @pytest.mark.asyncio
     async def test_docs_allowed(self, oidc_client):
         response = oidc_client.get("/docs")
         assert response.status_code in (200, 307)
 
+    @pytest.mark.asyncio
     async def test_openapi_json_allowed(self, oidc_client):
         response = oidc_client.get("/openapi.json")
         assert response.status_code == 200
 
 
 class TestOIDCModeProtectedRoutes:
+    @pytest.mark.asyncio
     async def test_missing_token_returns_401(self, oidc_client):
         response = oidc_client.get("/api/auth/me")
         assert response.status_code == 401
         assert "bearer" in response.headers.get("www-authenticate", "").lower()
 
+    @pytest.mark.asyncio
     async def test_general_no_token_401(self, oidc_client):
         response = oidc_client.post("/api/general/run", json={"task": "ping"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_conversations_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/conversations")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_memory_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/memory/memory")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_documents_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/documents")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_rag_no_token_401(self, oidc_client):
         response = oidc_client.post("/api/rag/search", json={"query": "test"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_models_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/models")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_sandbox_no_token_401(self, oidc_client):
         response = oidc_client.post("/api/sandbox/execute", json={"code": "print(1)"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_executions_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/executions")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_network_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/network/monitor")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_agent_no_token_401(self, oidc_client):
         response = oidc_client.post("/api/agent/run", json={"task": "ping"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_coder_no_token_401(self, oidc_client):
         response = oidc_client.post("/api/coder/run", json={"task": "echo hello"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_vision_no_token_401(self, oidc_client):
         response = oidc_client.post("/api/vision/analyze", json={})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_artifacts_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/artifacts")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_artifact_download_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/artifacts/fake-id/download")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_approvals_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/approvals/pending")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_receipts_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/receipts/nonexistent")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_receipt_chain_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/receipt-chain")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_judge_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/judge/overview")
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_chat_no_token_401(self, oidc_client):
         response = oidc_client.post("/api/chat", json={"message": "hi"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_system_status_no_token_401(self, oidc_client):
         response = oidc_client.get("/api/system/status")
         assert response.status_code == 401
 
 
 class TestOIDCModeValidToken:
+    @pytest.mark.asyncio
     async def test_auth_me_with_token(
         self, oidc_client, db_session, rsa_keypair, unique_subject
     ):
@@ -459,6 +491,7 @@ class TestOIDCModeValidToken:
         assert data["source"] == "oidc"
         assert data["user_id"] == user.id
 
+    @pytest.mark.asyncio
     async def test_valid_token_passes_other_protected_routes(
         self, oidc_client, db_session, rsa_keypair, unique_subject
     ):
@@ -487,6 +520,7 @@ class TestOIDCModeValidToken:
         response = oidc_client.get("/api/memory/memory", headers=headers)
         assert response.status_code != 401
 
+    @pytest.mark.asyncio
     async def test_organization_selection_preserved(
         self, oidc_client, db_session, rsa_keypair, unique_subject
     ):
@@ -520,6 +554,7 @@ class TestOIDCModeValidToken:
 
 
 class TestOIDCModeSideEffects:
+    @pytest.mark.asyncio
     async def test_no_token_blocks_general_model(
         self, oidc_client, monkeypatch
     ):
@@ -537,6 +572,7 @@ class TestOIDCModeSideEffects:
         assert response.status_code == 401
         assert call_count == 0
 
+    @pytest.mark.asyncio
     async def test_no_token_blocks_artifact_download(
         self, oidc_client
     ):
@@ -546,6 +582,7 @@ class TestOIDCModeSideEffects:
 
 
 class TestOIDCModeJWTValidation:
+    @pytest.mark.asyncio
     async def test_alg_none_rejected(self, oidc_client, unique_subject):
         payload = {
             "sub": unique_subject,
@@ -557,12 +594,14 @@ class TestOIDCModeJWTValidation:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_expired_token_401(self, oidc_client, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         token = _sign_token(private_key, unique_subject, settings.OIDC_ISSUER, settings.OIDC_AUDIENCE, "test-key-1", expiry_seconds=-120)
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_future_nbf_401(self, oidc_client, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         from datetime import datetime, timedelta, timezone
@@ -573,6 +612,7 @@ class TestOIDCModeJWTValidation:
 
 
 class TestOIDCModeIdentityResolution:
+    @pytest.mark.asyncio
     async def test_unknown_user_403(self, oidc_client, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         subject = f"unknown-{unique_subject}"
@@ -580,6 +620,7 @@ class TestOIDCModeIdentityResolution:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_inactive_user_403(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         subject = f"inactive-{unique_subject}"
@@ -596,6 +637,7 @@ class TestOIDCModeIdentityResolution:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_no_membership_403(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         subject = f"no-membership-{unique_subject}"
@@ -608,6 +650,7 @@ class TestOIDCModeIdentityResolution:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_single_membership_auto_selects(
         self, oidc_client, db_session, rsa_keypair, unique_subject
     ):
@@ -631,6 +674,7 @@ class TestOIDCModeIdentityResolution:
         assert data["organization_id"] == org.id
         assert data["roles"] == ["owner"]
 
+    @pytest.mark.asyncio
     async def test_foreign_org_header_403(
         self, oidc_client, db_session, rsa_keypair, unique_subject
     ):
@@ -659,6 +703,7 @@ class TestOIDCModeIdentityResolution:
         )
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_roles_from_selected_membership(
         self, oidc_client, db_session, rsa_keypair, unique_subject
     ):
@@ -691,6 +736,7 @@ class TestOIDCModeIdentityResolution:
 
 
 class TestOIDCModeWWWAuthenticate:
+    @pytest.mark.asyncio
     async def test_401_includes_bearer_challenge(self, oidc_client):
         response = oidc_client.get("/api/auth/me")
         assert response.status_code == 401

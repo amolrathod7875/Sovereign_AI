@@ -225,6 +225,7 @@ def _create_membership(session, org_id: str, user_id: str, role: str = "member",
 # ---------------------------------------------------------------------------
 
 class TestDevelopmentMode:
+    @pytest.mark.asyncio
     async def test_dev_principal(self, client):
         response = client.get("/api/auth/me")
         assert response.status_code == 200
@@ -235,11 +236,13 @@ class TestDevelopmentMode:
 
 
 class TestOIDCMode:
+    @pytest.mark.asyncio
     async def test_missing_token_returns_401(self, oidc_client):
         response = oidc_client.get("/api/auth/me")
         assert response.status_code == 401
         assert response.headers.get("www-authenticate", "").lower() == "bearer"
 
+    @pytest.mark.asyncio
     async def test_valid_token_returns_200(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -264,6 +267,7 @@ class TestOIDCMode:
         assert data["organization_id"] == org.id
         assert data["roles"] == ["member"]
 
+    @pytest.mark.asyncio
     async def test_expired_token_returns_401(self, oidc_client, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -272,6 +276,7 @@ class TestOIDCMode:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_future_nbf_returns_401(self, oidc_client, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -282,18 +287,21 @@ class TestOIDCMode:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_wrong_issuer_returns_401(self, oidc_client, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         token = _sign_token(private_key, unique_subject, "wrong-issuer", settings.OIDC_AUDIENCE, "test-key-1")
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_wrong_audience_returns_401(self, oidc_client, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         token = _sign_token(private_key, unique_subject, settings.OIDC_ISSUER, "wrong-audience", "test-key-1")
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_missing_sub_returns_401(self, oidc_client, rsa_keypair):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -309,6 +317,7 @@ class TestOIDCMode:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_alg_none_rejected(self, oidc_client, unique_subject):
         payload = {
             "sub": unique_subject,
@@ -320,6 +329,7 @@ class TestOIDCMode:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
     async def test_unknown_subject_returns_403(self, oidc_client, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -329,6 +339,7 @@ class TestOIDCMode:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_inactive_user_returns_403(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -347,6 +358,7 @@ class TestOIDCMode:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_no_membership_returns_403(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -361,6 +373,7 @@ class TestOIDCMode:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_inactive_membership_returns_403(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -379,6 +392,7 @@ class TestOIDCMode:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_multi_org_without_header_returns_409(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -401,6 +415,7 @@ class TestOIDCMode:
         response = oidc_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_multi_org_with_valid_header_returns_200(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -428,6 +443,7 @@ class TestOIDCMode:
         data = response.json()
         assert data["organization_id"] == org2.id
 
+    @pytest.mark.asyncio
     async def test_foreign_org_header_returns_403(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -451,6 +467,7 @@ class TestOIDCMode:
         )
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_single_membership_no_header_selects_org(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -472,6 +489,7 @@ class TestOIDCMode:
         assert data["organization_id"] == org.id
         assert data["roles"] == ["owner"]
 
+    @pytest.mark.asyncio
     async def test_single_membership_valid_header_selects_org(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -496,6 +514,7 @@ class TestOIDCMode:
         assert data["organization_id"] == org.id
         assert data["roles"] == ["member"]
 
+    @pytest.mark.asyncio
     async def test_single_membership_nonexistent_header_returns_403(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -517,6 +536,7 @@ class TestOIDCMode:
         )
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_multi_membership_foreign_header_returns_403(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -543,6 +563,7 @@ class TestOIDCMode:
         )
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_multi_membership_inactive_membership_header_returns_403(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -569,6 +590,7 @@ class TestOIDCMode:
         )
         assert response.status_code == 403
 
+    @pytest.mark.asyncio
     async def test_principal_roles_from_exact_membership(self, oidc_client, db_session, rsa_keypair, unique_subject):
         private_key, _ = rsa_keypair
         issuer = settings.OIDC_ISSUER
@@ -597,6 +619,7 @@ class TestOIDCMode:
         assert data["roles"] == ["viewer"]
         assert data["organization_id"] == org2.id
 
+    @pytest.mark.asyncio
     async def test_no_token_general_returns_401(self, oidc_client):
         response = oidc_client.post("/api/general/run", json={"task": "Hello"})
         assert response.status_code == 401

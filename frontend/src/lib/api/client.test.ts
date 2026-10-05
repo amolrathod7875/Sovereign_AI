@@ -3,13 +3,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const hoisted = vi.hoisted(() => {
   const instances: any[] = []
   const makeInstance = () => {
-    const fns = { get: vi.fn(), post: vi.fn() }
-    let onRejected: ((_e: any) => any) | null = null
+    const fns = { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() }
+    let responseRejected: ((_e: any) => any) | null = null
     const inst: any = {
       defaults: { headers: {} },
-      interceptors: { response: { use: (_f: any, r: any) => { onRejected = r } } },
-      get: (...args: any[]) => fns.get(...args).then((r: any) => r, (e: any) => (onRejected ? onRejected(e) : Promise.reject(e))),
-      post: (...args: any[]) => fns.post(...args).then((r: any) => r, (e: any) => (onRejected ? onRejected(e) : Promise.reject(e))),
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: (_f: any, r: any) => { responseRejected = r } },
+      },
+      get: (...args: any[]) => fns.get(...args).then((r: any) => r, (e: any) => (responseRejected ? responseRejected(e) : Promise.reject(e))),
+      post: (...args: any[]) => fns.post(...args).then((r: any) => r, (e: any) => (responseRejected ? responseRejected(e) : Promise.reject(e))),
+      patch: (...args: any[]) => fns.patch(...args).then((r: any) => r, (e: any) => (responseRejected ? responseRejected(e) : Promise.reject(e))),
+      delete: (...args: any[]) => fns.delete(...args).then((r: any) => r, (e: any) => (responseRejected ? responseRejected(e) : Promise.reject(e))),
     }
     inst._fns = fns
     return inst
@@ -30,8 +35,16 @@ beforeEach(() => {
   hoisted.instances.forEach((i) => {
     i._fns.get.mockReset()
     i._fns.post.mockReset()
+    i._fns.patch.mockReset()
+    i._fns.delete.mockReset()
+    i.interceptors.request.use.mockReset()
   })
 })
+
+// Instance mapping in client.ts (module load order):
+//   [0] api           = makeClient(CONTROL_TIMEOUT)
+//   [1] inference     = makeClient(INFERENCE_TIMEOUT)
+//   [2] publicApi     = makePublicClient(CONTROL_TIMEOUT)
 
 describe('apiClient — control-plane calls', () => {
   it('getSystemStatus returns probed status', async () => {
@@ -54,7 +67,7 @@ describe('apiClient — control-plane calls', () => {
   })
 
   it('listModels maps registry entries', async () => {
-    const inst = hoisted.instances[0]
+    const inst = hoisted.instances[2]
     inst._fns.get.mockResolvedValue({
       data: [{ id: 'general', name: 'Qwen2.5-3B-Instruct', endpoint: 'http://localhost:8001/v1', capabilities: ['reasoning'], context_length: 8192, status: 'online', local: true, modalities: ['text'] }],
     })
@@ -63,7 +76,7 @@ describe('apiClient — control-plane calls', () => {
   })
 
   it('routeTask posts to /models/route', async () => {
-    const inst = hoisted.instances[0]
+    const inst = hoisted.instances[2]
     inst._fns.post.mockResolvedValue({
       data: { task_type: 'CODING', modality: 'text', selected_model: 'qwen-coder', models_required: ['qwen-coder'], requires_rag: false, requires_tools: true, confidence: 0.88, reason: 'code', capabilities: ['code generation'], local_only: true, all_local: true, external_calls: 0 },
     })

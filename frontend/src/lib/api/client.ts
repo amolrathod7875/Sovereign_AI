@@ -40,6 +40,8 @@ import type {
   UpdateConversationRequest,
   CreateMessageRequest,
 } from './types'
+import type { AuthConfig, AuthBootstrapResponse, AuthMeResponse } from '@/auth/types'
+import { getSelectedOrganizationId, getStoredSession } from '@/auth/session'
 
 const BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
@@ -71,7 +73,28 @@ function friendlyDetail(status: number, data: unknown, fallback: string): string
   return fallback
 }
 
-function makeClient(timeout: number): AxiosInstance {
+// ---------------------------------------------------------------------------
+// Auth bridge — framework-independent accessors
+// ---------------------------------------------------------------------------
+
+export function getAuthHeaders(): Record<string, string> {
+  const session = getStoredSession()
+  const orgId = getSelectedOrganizationId()
+  const headers: Record<string, string> = {}
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`
+  }
+  if (orgId) {
+    headers['X-Sovereign-Organization'] = orgId
+  }
+  return headers
+}
+
+// ---------------------------------------------------------------------------
+// Public client (no auth interceptor)
+// ---------------------------------------------------------------------------
+
+function makePublicClient(timeout: number): AxiosInstance {
   const client = axios.create({
     baseURL: BASE_URL,
     timeout,
@@ -88,17 +111,68 @@ function makeClient(timeout: number): AxiosInstance {
   return client
 }
 
-// Long-running inference (agent/coder/vision) and short control-plane calls use
-// different timeouts so a 10-minute CPU coding run is not aborted, while a status
-// probe fails fast.
+// ---------------------------------------------------------------------------
+// Authenticated client
+// ---------------------------------------------------------------------------
+
+function makeClient(timeout: number): AxiosInstance {
+  const client = axios.create({
+    baseURL: BASE_URL,
+    timeout,
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+  })
+
+  client.interceptors.request.use((config) => {
+    const headers = getAuthHeaders()
+    if (headers.Authorization) {
+      config.headers.Authorization = headers.Authorization
+    }
+    if (headers['X-Sovereign-Organization']) {
+      config.headers['X-Sovereign-Organization'] = headers['X-Sovereign-Organization']
+    }
+    return config
+  })
+
+  client.interceptors.response.use(
+    (resp) => resp,
+    (err: AxiosError) => {
+      const status = err.response?.status ?? 0
+      const detail = friendlyDetail(status, err.response?.data, err.message)
+      return Promise.reject(new ApiError(status, detail))
+    },
+  )
+
+  return client
+}
+
 const api = makeClient(CONTROL_TIMEOUT)
 const inference = makeClient(INFERENCE_TIMEOUT)
+const publicApi = makePublicClient(CONTROL_TIMEOUT)
+
+// ---------------------------------------------------------------------------
+// Auth config/bootstrap (public)
+// ---------------------------------------------------------------------------
+
+export async function getAuthConfig(): Promise<AuthConfig> {
+  const { data } = await publicApi.get<AuthConfig>('/auth/config')
+  return data
+}
+
+export async function getAuthBootstrap(): Promise<AuthBootstrapResponse> {
+  const { data } = await api.get<AuthBootstrapResponse>('/auth/bootstrap')
+  return data
+}
+
+export async function getAuthMe(): Promise<AuthMeResponse> {
+  const { data } = await api.get<AuthMeResponse>('/auth/me')
+  return data
+}
 
 // ---------------------------------------------------------------------------
 // Health / System
 // ---------------------------------------------------------------------------
 export async function getHealth(): Promise<HealthResponse> {
-  const { data } = await api.get<HealthResponse>('/system/health')
+  const { data } = await publicApi.get<HealthResponse>('/system/health')
   return data
 }
 
@@ -111,12 +185,12 @@ export async function getSystemStatus(): Promise<SystemStatus> {
 // Models / Routing
 // ---------------------------------------------------------------------------
 export async function listModels(): Promise<ModelInfo[]> {
-  const { data } = await api.get<ModelInfo[]>('/models')
+  const { data } = await publicApi.get<ModelInfo[]>('/models')
   return data
 }
 
 export async function routeTask(req: Partial<RoutingRequest>): Promise<RoutingDecision> {
-  const { data } = await api.post<RoutingDecision>('/models/route', req)
+  const { data } = await publicApi.post<RoutingDecision>('/models/route', req)
   return data
 }
 
@@ -166,7 +240,7 @@ export async function analyzeVision(req: {
 // Documents / Upload / Ingestion
 // ---------------------------------------------------------------------------
 export async function getSupportedFormats(): Promise<SupportedFormats> {
-  const { data } = await api.get<SupportedFormats>('/documents/formats')
+  const { data } = await publicApi.get<SupportedFormats>('/documents/formats')
   return data
 }
 
@@ -220,13 +294,7 @@ export async function runGeneral(req: {
   conversation_id?: string | null
   current_message_id?: string | null
 }): Promise<GeneralRunResponse> {
-  const { data } = await inference.post<GeneralRunResponse>('/general/run', {
-    task: req.task,
-    asset_tag: req.asset_tag ?? null,
-    use_rag: req.use_rag ?? false,
-    conversation_id: req.conversation_id ?? null,
-    current_message_id: req.current_message_id ?? null,
-  })
+  const { data } = await inference.post<GeneralRunResponse>('/general/run', req)
   return data
 }
 
@@ -243,8 +311,32 @@ export async function listArtifacts(opts?: {
   return data
 }
 
-export function artifactDownloadUrl(artifactId: string): string {
-  return `${BASE_URL}/artifacts/${artifactId}/download`
+export async function downloadArtifact(artifactId: string): Promise<{ blob: Blob; filename: string }> {
+  const orgId = getSelectedOrganizationId()
+  const session = getStoredSession()
+  const headers: Record<string, string> = {}
+  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
+  if (orgId) headers['X-Sovereign-Organization'] = orgId
+
+  const response = await fetch(`${BASE_URL}/artifacts/${encodeURIComponent(artifactId)}/download`, {
+    headers,
+  })
+
+  if (!response.ok) {
+    throw new ApiError(response.status, `Download failed (${response.status})`)
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('content-disposition') || ''
+  const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/)
+  let filename = `artifact-${artifactId}`
+  if (match?.[1]) {
+    filename = decodeURIComponent(match[1])
+  } else if (match?.[2]) {
+    filename = match[2]
+  }
+
+  return { blob, filename }
 }
 
 // ---------------------------------------------------------------------------
@@ -261,65 +353,127 @@ export function createNetworkMonitorStream(
   onConnect: () => void,
   onDisconnect: () => void
 ): () => void {
-  const eventSource = new (window as any).EventSource(`${BASE_URL}/network/monitor`)
-  
-  eventSource.onopen = () => {
-    console.log('Network monitor SSE connected')
-    onConnect()
+  const controller = new AbortController()
+  const { signal } = controller
+
+  const orgId = getSelectedOrganizationId()
+  const session = getStoredSession()
+  const headers: Record<string, string> = {
+    Accept: 'text/event-stream',
   }
-  
-  eventSource.onmessage = (event: any) => {
-    try {
-      const data = JSON.parse(event.data) as NetworkEvent
-      onEvent(data)
-    } catch (err) {
-      console.error('Failed to parse network event:', err)
-      onError(new Error('Failed to parse network event data'))
+  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
+  if (orgId) headers['X-Sovereign-Organization'] = orgId
+
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+  function cleanup() {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
     }
-  }
-  
-  eventSource.addEventListener('connection_attempt', (event: any) => {
-    try {
-      const data = JSON.parse(event.data) as NetworkEvent
-      onEvent(data)
-    } catch (err) {
-      console.error('Failed to parse connection_attempt event:', err)
-    }
-  })
-  
-  eventSource.onerror = (event: any) => {
-    console.error('Network monitor SSE error:', event)
-    onError(new Error('Network monitor connection failed'))
+    controller.abort()
     onDisconnect()
   }
-  
-  // Return cleanup function
-  return () => {
-    eventSource.close()
-    onDisconnect()
+
+  function connect() {
+    if (signal.aborted) return
+
+    fetch(`${BASE_URL}/network/monitor`, {
+      headers,
+      signal,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            onError(new ApiError(response.status, 'Authentication required'))
+            cleanup()
+            return
+          }
+          throw new ApiError(response.status, `SSE failed: ${response.status}`)
+        }
+
+        if (!response.body) {
+          throw new Error('No response body for SSE')
+        }
+
+        onConnect()
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        function processChunk(): Promise<void> {
+          return reader.read().then(({ done, value }) => {
+            if (done || signal.aborted) {
+              cleanup()
+              return
+            }
+
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
+
+            let eventData = ''
+
+            for (const line of lines) {
+              if (line.startsWith(':')) continue // comment
+              if (line.startsWith('event:')) {
+                // event name parsed but not currently used
+              } else if (line.startsWith('data:')) {
+                eventData = line.slice(5).trim()
+              } else if (line === '' && eventData) {
+                try {
+                  const data = JSON.parse(eventData) as NetworkEvent
+                  onEvent(data)
+                } catch {
+                  onError(new Error('Failed to parse SSE event'))
+                }
+                eventData = ''
+              }
+            }
+
+            return processChunk()
+          })
+        }
+
+        processChunk().catch((err: unknown) => {
+          if (signal.aborted) return
+          onError(err instanceof Error ? err : new Error(String(err)))
+          cleanup()
+        })
+      })
+      .catch((err: unknown) => {
+        if (signal.aborted) return
+        onError(err instanceof Error ? err : new Error(String(err)))
+        cleanup()
+      })
   }
+
+  connect()
+
+  return cleanup
 }
 
 // ---------------------------------------------------------------------------
 // Judge Mode (read-only)
 // ---------------------------------------------------------------------------
 export async function getJudgeOverview(): Promise<JudgeOverview> {
-  const { data } = await api.get<JudgeOverview>('/judge/overview')
+  const { data } = await publicApi.get<JudgeOverview>('/judge/overview')
   return data
 }
 
 export async function getJudgeRun(runId: string): Promise<JudgeRunDetail> {
-  const { data } = await api.get<JudgeRunDetail>(`/judge/runs/${encodeURIComponent(runId)}`)
+  const { data } = await publicApi.get<JudgeRunDetail>(`/judge/runs/${encodeURIComponent(runId)}`)
   return data
 }
 
 export async function getJudgeFlagship(): Promise<JudgeFlagshipEvidence> {
-  const { data } = await api.get<JudgeFlagshipEvidence>('/judge/flagship')
+  const { data } = await publicApi.get<JudgeFlagshipEvidence>('/judge/flagship')
   return data
 }
 
 export async function getJudgeEvaluation(): Promise<JudgeEvaluationEvidence> {
-  const { data } = await api.get<JudgeEvaluationEvidence>('/judge/evaluation')
+  const { data } = await publicApi.get<JudgeEvaluationEvidence>('/judge/evaluation')
   return data
 }
 
@@ -339,7 +493,7 @@ export const apiClient = {
   listDocuments,
   searchRag,
   listArtifacts,
-  artifactDownloadUrl,
+  downloadArtifact,
   getNetworkEvents,
   createNetworkMonitorStream,
   getJudgeOverview,
@@ -354,7 +508,12 @@ export const apiClient = {
   deleteConversation,
   getConversationMessages,
   createConversationMessage,
+  getAuthConfig,
+  getAuthBootstrap,
+  getAuthMe,
 }
+
+export { publicApi }
 
 // ---------------------------------------------------------------------------
 // Chat History — Phase M1
