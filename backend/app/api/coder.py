@@ -17,10 +17,13 @@ import uuid
 from typing import Dict, Any, List, Optional
 from httpx import ConnectError
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from app.schemas import RoutingDecision
+from app.conversations.service import persist_assistant_message
+from app.storage.postgres import async_session
+from app.identity.principal import Principal, get_current_principal_dep
 from agent.coder.config import CODER_MODEL_TIMEOUT, CODER_ENDPOINT
 from app.models.client import ModelBusyError
 
@@ -36,6 +39,7 @@ CODER_DEADLINE = max(CODER_MODEL_TIMEOUT * 3, 900)  # at least 15 minutes
 
 class CoderRunRequest(BaseModel):
     task: str
+    conversation_id: Optional[str] = None
 
 
 class CoderRunResponse(BaseModel):
@@ -54,10 +58,11 @@ class CoderRunResponse(BaseModel):
     routing: RoutingDecision | None = None
     response_time_seconds: Optional[float] = None
     model_performance: Optional[Dict[str, Any]] = None
+    assistant_message_id: Optional[str] = None
 
 
 @router.post("/run", response_model=CoderRunResponse)
-async def run_coder(req: CoderRunRequest):
+async def run_coder(req: CoderRunRequest, principal: Principal = Depends(get_current_principal_dep)):
     from agent.coder.run import run_coder_task
 
     if not (req.task or "").strip():
@@ -66,8 +71,6 @@ async def run_coder(req: CoderRunRequest):
     request_started = time.perf_counter()
     run_id = f"coder_{uuid.uuid4().hex[:12]}"
     try:
-        # The model runs in a thread so we never block the event loop.
-        # Application-level deadline prevents indefinite hangs on CPU-only inference.
         result = await asyncio.wait_for(
             asyncio.to_thread(run_coder_task, req.task, run_id),
             timeout=CODER_DEADLINE,
@@ -113,7 +116,7 @@ async def run_coder(req: CoderRunRequest):
                 f"Transport error: {e}"
             ),
         )
-    except Exception as e:  # surface failures clearly
+    except Exception as e:
         logger.error("coder run failed: %s", e)
         raise HTTPException(status_code=500, detail=f"coder run failed: {e}")
 
@@ -125,7 +128,7 @@ async def run_coder(req: CoderRunRequest):
 
     response_time_seconds = round(time.perf_counter() - request_started, 3)
 
-    return CoderRunResponse(
+    response = CoderRunResponse(
         run_id=run_id,
         status=result.get("status", "UNKNOWN"),
         files=result.get("files", []),
@@ -142,6 +145,47 @@ async def run_coder(req: CoderRunRequest):
         response_time_seconds=response_time_seconds,
         model_performance=result.get("model_performance"),
     )
+
+    assistant_message_id: Optional[str] = None
+    if req.conversation_id:
+        try:
+            async with async_session() as session:
+                assistant = await persist_assistant_message(
+                    session,
+                    conversation_id=req.conversation_id,
+                    organization_id=principal.organization_id,
+                    principal=principal,
+                    content=result.get("reasoning_summary") or result.get("decision"),
+                    status=response.status,
+                    mode="coding",
+                    task_type=(result.get("routing") or {}).get("task_type") if isinstance(result.get("routing"), dict) else None,
+                    routing_model=(result.get("routing") or {}).get("selected_model") if isinstance(result.get("routing"), dict) else None,
+                    actual_model=(result.get("routing") or {}).get("selected_model") if isinstance(result.get("routing"), dict) else None,
+                    rag_used=False,
+                    external_calls=response.external_calls,
+                    response_time_seconds=response.response_time_seconds,
+                    model_inference_seconds=(response.model_performance or {}).get("inference_seconds"),
+                    tokens_per_second=(response.model_performance or {}).get("tokens_per_second"),
+                    prompt_tokens=(response.model_performance or {}).get("prompt_tokens"),
+                    completion_tokens=(response.model_performance or {}).get("completion_tokens"),
+                    total_tokens=(response.model_performance or {}).get("total_tokens"),
+                    display_payload={
+                        "files": result.get("files"),
+                        "file_contents": result.get("file_contents"),
+                        "test_output": result.get("test_output") or fr.get("test_output"),
+                        "execution_trace": result.get("trace"),
+                        "errors": result.get("errors"),
+                    },
+                    idempotency_key=run_id,
+                )
+                assistant_message_id = assistant.id
+        except Exception:
+            logger.warning("coder assistant persistence failed", exc_info=True)
+
+    out = response.model_dump()
+    if assistant_message_id:
+        out["assistant_message_id"] = assistant_message_id
+    return out
 
 
 @router.get("/runs")

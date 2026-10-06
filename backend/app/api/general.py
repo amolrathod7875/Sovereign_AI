@@ -9,6 +9,7 @@ POST /api/general/run
   * RAG_QA     -> hybrid retrieval + local general synthesis (if available)
 """
 import time
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import Request
 import logging
@@ -19,6 +20,8 @@ from app.schemas import RoutingDecision
 from app.models.router import route, RoutingRequest, NoLocalModelAvailable
 from app.models.registry import get_model, is_local_endpoint
 from app.identity.principal import get_current_principal, get_current_principal_dep, Principal
+from app.conversations.service import persist_assistant_message
+from app.storage.postgres import async_session
 from agent.tools.search_kb import search_knowledge_base
 from agent.security.netguard import no_network
 
@@ -49,6 +52,7 @@ class GeneralRunResponse(BaseModel):
     conversation_context: Optional[Dict[str, Any]] = None
     memory_context: Optional[Dict[str, Any]] = None
     unified_context: Optional[Dict[str, Any]] = None
+    assistant_message_id: Optional[str] = None
 
 
 async def _try_general_synthesis(
@@ -132,6 +136,7 @@ async def run_general(
         raise HTTPException(status_code=422, detail="task must not be empty")
 
     request_started = time.perf_counter()
+    run_id = f"general_{uuid.uuid4().hex[:12]}"
 
     unified: Optional[UnifiedContext] = None
     unified_usage: Optional[UnifiedContextUsage] = None
@@ -305,4 +310,43 @@ async def run_general(
         memory_context=memory_context_meta,
         unified_context=unified_context_meta,
     )
-    return response.model_dump()
+
+    assistant_message_id: Optional[str] = None
+    if req.conversation_id:
+        try:
+            async with async_session() as session:
+                assistant = await persist_assistant_message(
+                    session,
+                    conversation_id=req.conversation_id,
+                    organization_id=principal.organization_id,
+                    principal=principal,
+                    content=answer if status == "COMPLETED" else None,
+                    status=status,
+                    mode="knowledge",
+                    task_type=routing.get("task_type") if isinstance(routing, dict) else None,
+                    routing_model=routing.get("selected_model") if isinstance(routing, dict) else None,
+                    actual_model=actual_execution[0] if actual_execution else None,
+                    rag_used=rag_used and len(evidence) > 0,
+                    external_calls=guard.external_calls,
+                    response_time_seconds=response_time_seconds,
+                    model_inference_seconds=(model_performance or {}).get("inference_seconds"),
+                    tokens_per_second=(model_performance or {}).get("tokens_per_second"),
+                    prompt_tokens=(model_performance or {}).get("prompt_tokens"),
+                    completion_tokens=(model_performance or {}).get("completion_tokens"),
+                    total_tokens=(model_performance or {}).get("total_tokens"),
+                    error_detail=errors[0] if status != "COMPLETED" and errors else None,
+                    display_payload={
+                        "routing": routing,
+                        "evidence": evidence,
+                        "errors": errors,
+                    },
+                    idempotency_key=run_id,
+                )
+                assistant_message_id = assistant.id
+        except Exception:
+            logger.warning("general assistant persistence failed", exc_info=True)
+
+    out = response.model_dump()
+    if assistant_message_id:
+        out["assistant_message_id"] = assistant_message_id
+    return out

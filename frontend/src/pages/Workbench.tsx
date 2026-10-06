@@ -28,7 +28,7 @@ import type {
   ModelPerformanceMetrics,
   ConversationSummary,
   ConversationMessage,
-  CreateMessageRequest,
+  CreateUserMessageRequest,
 } from '../lib/api/types'
 
 type TaskMode = 'auto' | 'coding' | 'vision' | 'knowledge'
@@ -113,35 +113,12 @@ function resolveArtifacts(names: string[]) {
   })
 }
 
-function chatMessageToPersistentPayload(msg: ChatMessage, _conversationId: string): CreateMessageRequest {
+function chatMessageToPersistentPayload(msg: ChatMessage, _conversationId: string): CreateUserMessageRequest {
   return {
     client_message_id: msg.id,
-    role: msg.role,
     content: msg.content,
     mode: msg.mode ?? null,
-    status: msg.error ? 'FAILED' : 'OK',
-    task_type: msg.execution?.task ?? null,
-    actual_model: msg.execution?.actualModel ?? null,
-    external_calls: msg.externalCalls ?? msg.execution?.externalCalls ?? null,
-    response_time_seconds: msg.execution?.responseTimeSeconds ?? null,
-    model_inference_seconds: msg.execution?.modelInferenceSeconds ?? null,
-    tokens_per_second: msg.execution?.tokensPerSecond ?? null,
-    prompt_tokens: msg.execution?.promptTokens ?? null,
-    completion_tokens: msg.execution?.completionTokens ?? null,
-    total_tokens: msg.execution?.totalTokens ?? null,
-    error_detail: msg.error ?? null,
-    display_payload: msg.execution
-      ? {
-          execution: msg.execution,
-          evidence: msg.evidence ?? null,
-          visionResult: msg.visionResult ?? null,
-          visionTags: msg.visionTags ?? null,
-          coderFiles: msg.coderFiles ?? null,
-          coderTest: msg.coderTest ?? null,
-          artifacts: msg.artifacts ?? null,
-          errors: msg.errors ?? null,
-        }
-      : null,
+    attachments: [],
   }
 }
 
@@ -377,18 +354,18 @@ export default function Workbench() {
 
       setMessages((m) => [...m, assistant])
 
-      // Persist assistant message after inference
+      // Refresh trusted history from backend after successful inference.
       if (_conversationId) {
         try {
-          await apiClient.createConversationMessage(_conversationId, chatMessageToPersistentPayload(assistant, _conversationId))
           const list = await apiClient.listConversations()
           setConversations(list)
           if (selectedConversationId === _conversationId) {
             const msgs = await apiClient.getConversationMessages(_conversationId, 500, 0)
             setHistoryMessages(msgs)
+            setMessages(msgs.map(persistedMessageToChatMessage))
           }
-        } catch (persistErr) {
-          console.warn('History persistence failed (session continues):', persistErr)
+        } catch (refreshErr) {
+          console.warn('History refresh failed (session continues):', refreshErr)
         }
       }
     } catch (err) {
@@ -403,21 +380,6 @@ export default function Workbench() {
           error: detail,
         },
       ])
-      // Persist error message if we have a conversation
-      if (_conversationId) {
-        try {
-          await apiClient.createConversationMessage(_conversationId, {
-            role: 'assistant',
-            content: `Request failed (${err instanceof ApiError ? err.status : '—'}).`,
-            error_detail: detail,
-            status: 'FAILED',
-          })
-          const list = await apiClient.listConversations()
-          setConversations(list)
-        } catch (persistErr) {
-          console.warn('History persistence failed (session continues):', persistErr)
-        }
-      }
     } finally {
       setIsProcessing(false)
       attachFile(null)

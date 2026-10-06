@@ -21,10 +21,13 @@ import time
 import uuid
 from typing import Dict, Any, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from app.schemas import RoutingDecision
+from app.conversations.service import persist_assistant_message
+from app.storage.postgres import async_session
+from app.identity.principal import Principal, get_current_principal_dep
 from governance.approval import ApprovalService, ApprovalConflictError, ArtifactIntegrityError
 
 logger = logging.getLogger(__name__)
@@ -38,6 +41,8 @@ class AgentRunRequest(BaseModel):
     asset_tag: str = "R-1001"
     image_path: Optional[str] = None
     analysis_type: str = "general"
+    conversation_id: Optional[str] = None
+    current_message_id: Optional[str] = None
 
 
 class AgentRunResponse(BaseModel):
@@ -65,6 +70,7 @@ class AgentRunResponse(BaseModel):
     approval_record_available: bool = False
     response_time_seconds: Optional[float] = None
     model_performance: Optional[Dict[str, Any]] = None
+    assistant_message_id: Optional[str] = None
 
 
 def _to_response(result: Dict[str, Any]) -> AgentRunResponse:
@@ -97,7 +103,7 @@ def _to_response(result: Dict[str, Any]) -> AgentRunResponse:
 
 
 @router.post("/run", response_model=AgentRunResponse)
-async def run_agent(req: AgentRunRequest):
+async def run_agent(req: AgentRunRequest, principal: Principal = Depends(get_current_principal_dep)):
     from agent.run import run_agent_task
 
     if not (req.task or "").strip():
@@ -106,7 +112,6 @@ async def run_agent(req: AgentRunRequest):
     request_started = time.perf_counter()
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     try:
-        # The graph is synchronous and CPU-bound: keep it off the event loop.
         result = await asyncio.to_thread(
             run_agent_task,
             req.task,
@@ -120,7 +125,7 @@ async def run_agent(req: AgentRunRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:  # surface failures clearly
+    except Exception as e:
         logger.error("agent run failed: %s", e)
         raise HTTPException(status_code=500, detail=f"agent run failed: {e}")
 
@@ -153,7 +158,47 @@ async def run_agent(req: AgentRunRequest):
     resp.approval_record_available = approval_record_available
     resp.response_time_seconds = round(time.perf_counter() - request_started, 3)
     resp.model_performance = None
-    return resp
+
+    assistant_message_id: Optional[str] = None
+    if req.conversation_id:
+        try:
+            async with async_session() as session:
+                assistant = await persist_assistant_message(
+                    session,
+                    conversation_id=req.conversation_id,
+                    organization_id=principal.organization_id,
+                    principal=principal,
+                    content=result.get("reasoning_summary") or result.get("decision"),
+                    status="COMPLETED" if result.get("status") not in (None, "FAILED", "ERROR") else "FAILED",
+                    mode="knowledge",
+                    task_type=(result.get("routing") or {}).get("task_type") if isinstance(result.get("routing"), dict) else None,
+                    routing_model=(result.get("routing") or {}).get("selected_model") if isinstance(result.get("routing"), dict) else None,
+                    actual_model="Industrial LangGraph workflow",
+                    rag_used=(result.get("routing") or {}).get("requires_rag") if isinstance(result.get("routing"), dict) else None,
+                    tools_used="Local tools" if (result.get("routing") or {}).get("requires_tools") else None,
+                    local_execution=(result.get("routing") or {}).get("all_local") if isinstance(result.get("routing"), dict) else None,
+                    external_calls=result.get("external_calls", 0),
+                    response_time_seconds=resp.response_time_seconds,
+                    display_payload={
+                        "reasoning_summary": result.get("reasoning_summary"),
+                        "decision": result.get("decision"),
+                        "evidence": result.get("evidence"),
+                        "vision_evidence": result.get("vision_evidence"),
+                        "vision_tags": result.get("vision_tags"),
+                        "artifacts": result.get("artifacts"),
+                        "errors": result.get("errors"),
+                        "trace": result.get("trace"),
+                    },
+                    idempotency_key=run_id,
+                )
+                assistant_message_id = assistant.id
+        except Exception:
+            logger.warning("agent assistant persistence failed", exc_info=True)
+
+    out = resp.model_dump()
+    if assistant_message_id:
+        out["assistant_message_id"] = assistant_message_id
+    return out
 
 
 @router.get("/runs")

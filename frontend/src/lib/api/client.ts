@@ -38,7 +38,7 @@ import type {
   ConversationMessage,
   CreateConversationRequest,
   UpdateConversationRequest,
-  CreateMessageRequest,
+  CreateUserMessageRequest,
 } from './types'
 import type { AuthConfig, AuthBootstrapResponse, AuthMeResponse } from '@/auth/types'
 import { getSelectedOrganizationId, getStoredSession } from '@/auth/session'
@@ -557,7 +557,7 @@ export async function getConversationMessages(
 
 export async function createConversationMessage(
   conversationId: string,
-  req: CreateMessageRequest,
+  req: CreateUserMessageRequest,
 ): Promise<ConversationMessage> {
   const { data } = await api.post<ConversationMessage>(`/conversations/${encodeURIComponent(conversationId)}/messages`, req)
   return data

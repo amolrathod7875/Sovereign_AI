@@ -19,6 +19,7 @@ from app.storage.postgres import (
     Message,
     MessageAttachment,
 )
+from app.conversations.service import persist_user_message
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -94,28 +95,13 @@ class UpdateConversationRequest(BaseModel):
     archived: Optional[bool] = None
 
 
-class CreateMessageRequest(BaseModel):
+class CreateUserMessageRequest(BaseModel):
     client_message_id: Optional[str] = None
-    role: str = "user"
     content: Optional[str] = None
     mode: Optional[str] = None
-    status: Optional[str] = None
-    task_type: Optional[str] = None
-    routing_model: Optional[str] = None
-    actual_model: Optional[str] = None
-    rag_used: Optional[bool] = None
-    tools_used: Optional[str] = None
-    local_execution: Optional[bool] = None
-    external_calls: Optional[int] = None
-    response_time_seconds: Optional[float] = None
-    model_inference_seconds: Optional[float] = None
-    tokens_per_second: Optional[float] = None
-    prompt_tokens: Optional[int] = None
-    completion_tokens: Optional[int] = None
-    total_tokens: Optional[int] = None
-    error_detail: Optional[str] = None
-    display_payload: Optional[dict] = None
     attachments: Optional[List[dict]] = None
+
+    model_config = {"extra": "forbid"}
 
 
 # ---------------------------------------------------------------------------
@@ -389,29 +375,32 @@ async def get_messages(
 @router.post("/{conversation_id}/messages", response_model=ConversationMessage)
 async def create_message(
     conversation_id: str,
-    req: CreateMessageRequest,
+    req: CreateUserMessageRequest,
     principal: Principal = Depends(_get_principal),
 ):
     await _check_db()
     async with async_session() as session:
-        conv = await session.get(Conversation, conversation_id)
-        if not conv or conv.organization_id != principal.organization_id or conv.owner_user_id != principal.user_id:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-
-        # Idempotency: return existing client_message_id if already present
-        if req.client_message_id:
-            existing = await session.execute(
-                select(Message).where(
-                    Message.conversation_id == conversation_id,
-                    Message.client_message_id == req.client_message_id,
-                )
+        try:
+            msg = await persist_user_message(
+                session,
+                conversation_id=conversation_id,
+                organization_id=principal.organization_id,
+                principal=principal,
+                content=req.content,
+                client_message_id=req.client_message_id,
+                mode=req.mode,
+                attachments=req.attachments,
             )
-            found = existing.scalar_one_or_none()
-            if found:
-                attachments_result = await session.execute(
-                    select(MessageAttachment).where(MessageAttachment.message_id == found.id)
-                )
-                attachments = [
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+        attachments_out: List[ConversationAttachment] = []
+        if req.attachments:
+            attachments_result = await session.execute(
+                select(MessageAttachment).where(MessageAttachment.message_id == msg.id)
+            )
+            for a in attachments_result.scalars().all():
+                attachments_out.append(
                     ConversationAttachment(
                         id=a.id,
                         message_id=a.message_id,
@@ -423,114 +412,7 @@ async def create_message(
                         checksum=a.checksum,
                         created_at=_iso(a.created_at),
                     )
-                    for a in attachments_result.scalars().all()
-                ]
-                return ConversationMessage(
-                    id=found.id,
-                    conversation_id=found.conversation_id,
-                    organization_id=found.organization_id,
-                    author_user_id=found.author_user_id,
-                    sequence_no=found.sequence_no,
-                    role=found.role,
-                    content=found.content,
-                    created_at=_iso(found.created_at),
-                    status=found.status,
-                    mode=found.mode,
-                    task_type=found.task_type,
-                    routing_model=found.routing_model,
-                    actual_model=found.actual_model,
-                    rag_used=found.rag_used,
-                    tools_used=found.tools_used,
-                    local_execution=found.local_execution,
-                    external_calls=found.external_calls,
-                    response_time_seconds=found.response_time_seconds,
-                    model_inference_seconds=found.model_inference_seconds,
-                    tokens_per_second=found.tokens_per_second,
-                    prompt_tokens=found.prompt_tokens,
-                    completion_tokens=found.completion_tokens,
-                    total_tokens=found.total_tokens,
-                    error_detail=found.error_detail,
-                    display_payload=found.display_payload,
-                    client_message_id=found.client_message_id,
-                    attachments=attachments,
                 )
-
-        # Auto-title on first user message
-        title_updated = False
-        if conv.title in (None, "", "New conversation") and req.role == "user" and req.content:
-            conv.title = _derive_title_from_content(req.content)
-            title_updated = True
-
-        # Sequence no
-        next_seq = conv.next_sequence_no
-        conv.next_sequence_no = next_seq + 1
-
-        # Author
-        author_user_id = principal.user_id if req.role == "user" else None
-
-        msg = Message(
-            conversation_id=conversation_id,
-            organization_id=principal.organization_id,
-            author_user_id=author_user_id,
-            sequence_no=next_seq,
-            role=req.role,
-            content=req.content,
-            status=req.status,
-            mode=req.mode,
-            task_type=req.task_type,
-            routing_model=req.routing_model,
-            actual_model=req.actual_model,
-            rag_used=req.rag_used,
-            tools_used=req.tools_used,
-            local_execution=req.local_execution,
-            external_calls=req.external_calls,
-            response_time_seconds=req.response_time_seconds,
-            model_inference_seconds=req.model_inference_seconds,
-            tokens_per_second=req.tokens_per_second,
-            prompt_tokens=req.prompt_tokens,
-            completion_tokens=req.completion_tokens,
-            total_tokens=req.total_tokens,
-            error_detail=req.error_detail,
-            display_payload=req.display_payload,
-            client_message_id=req.client_message_id,
-        )
-        session.add(msg)
-
-        # Update conversation metadata
-        conv.last_message_at = _now()
-        conv.updated_at = _now()
-
-        await session.commit()
-        await session.refresh(msg)
-
-        # Attachments
-        attachments_out: List[ConversationAttachment] = []
-        if req.attachments:
-            for att in req.attachments:
-                ma = MessageAttachment(
-                    message_id=msg.id,
-                    conversation_id=conversation_id,
-                    document_id=att.get("document_id"),
-                    filename=att["filename"],
-                    mime_type=att.get("mime_type"),
-                    size=att.get("size"),
-                    checksum=att.get("checksum"),
-                )
-                session.add(ma)
-                attachments_out.append(
-                    ConversationAttachment(
-                        id=ma.id,
-                        message_id=ma.message_id,
-                        conversation_id=ma.conversation_id,
-                        document_id=ma.document_id,
-                        filename=ma.filename,
-                        mime_type=ma.mime_type,
-                        size=ma.size,
-                        checksum=ma.checksum,
-                        created_at=_iso(ma.created_at),
-                    )
-                )
-            await session.commit()
 
         return ConversationMessage(
             id=msg.id,

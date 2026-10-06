@@ -1,10 +1,15 @@
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+
+from app.conversations.service import persist_assistant_message
+from app.storage.postgres import async_session
+from app.identity.principal import Principal, get_current_principal_dep
+
 import asyncio
 import logging
 import time
+import uuid
 from typing import Any, Dict, Optional
-
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -14,6 +19,7 @@ class VisionAnalyzeRequest(BaseModel):
     file_path: str
     analysis_type: str = "general"   # general | pid | document | ocr | inspection
     prompt: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 
 class VisionAnalyzeResponse(BaseModel):
@@ -25,6 +31,7 @@ class VisionAnalyzeResponse(BaseModel):
     equipment_tags: list = []
     response_time_seconds: Optional[float] = None
     model_performance: Optional[Dict[str, Any]] = None
+    assistant_message_id: Optional[str] = None
 
 
 def _analyze_guarded(file_path: str, prompt: Optional[str], analysis_type: str) -> Dict[str, Any]:
@@ -41,12 +48,13 @@ def _analyze_guarded(file_path: str, prompt: Optional[str], analysis_type: str) 
 
 
 @router.post("/analyze", response_model=VisionAnalyzeResponse)
-async def analyze(req: VisionAnalyzeRequest):
+async def analyze(req: VisionAnalyzeRequest, principal: Principal = Depends(get_current_principal_dep)):
     from agent.tools.vision import VISION_MODEL_NAME, VisionUpstreamResponseError, VisionModelBusyError
     from agent.config import VISION_ENDPOINT
 
     request_started = time.perf_counter()
     t0 = time.time()
+    run_id = f"vision_{uuid.uuid4().hex[:12]}"
     try:
         payload = await asyncio.to_thread(
             _analyze_guarded, req.file_path, req.prompt, req.analysis_type
@@ -54,7 +62,6 @@ async def analyze(req: VisionAnalyzeRequest):
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except (PermissionError, ValueError, IsADirectoryError) as e:
-        # Path denied / unsupported type — never leak internals.
         raise HTTPException(status_code=400, detail=str(e))
     except TimeoutError as e:
         raise HTTPException(
@@ -93,7 +100,6 @@ async def analyze(req: VisionAnalyzeRequest):
         )
     except Exception as e:
         msg = str(e)
-        # An unreachable local llama.cpp server surfaces as an OpenAI APIConnectionError.
         if "Connection" in type(e).__name__ or "connect" in msg.lower():
             raise HTTPException(
                 status_code=503,
@@ -108,7 +114,7 @@ async def analyze(req: VisionAnalyzeRequest):
 
     result = payload["result"]
     response_time_seconds = round(time.perf_counter() - request_started, 3)
-    return VisionAnalyzeResponse(
+    response = VisionAnalyzeResponse(
         status="completed",
         result=result,
         model=result.get("model", VISION_MODEL_NAME),
@@ -118,3 +124,35 @@ async def analyze(req: VisionAnalyzeRequest):
         response_time_seconds=response_time_seconds,
         model_performance=None,
     )
+
+    assistant_message_id: Optional[str] = None
+    if req.conversation_id:
+        try:
+            async with async_session() as session:
+                assistant = await persist_assistant_message(
+                    session,
+                    conversation_id=req.conversation_id,
+                    organization_id=principal.organization_id,
+                    principal=principal,
+                    content=result.get("description") or "Vision analysis complete.",
+                    status="COMPLETED",
+                    mode="vision",
+                    task_type=req.analysis_type,
+                    actual_model=result.get("model", VISION_MODEL_NAME),
+                    rag_used=False,
+                    external_calls=payload["external_calls"],
+                    response_time_seconds=response_time_seconds,
+                    display_payload={
+                        "result": result,
+                        "equipment_tags": payload["equipment_tags"],
+                    },
+                    idempotency_key=run_id,
+                )
+                assistant_message_id = assistant.id
+        except Exception:
+            logger.warning("vision assistant persistence failed", exc_info=True)
+
+    out = response.model_dump()
+    if assistant_message_id:
+        out["assistant_message_id"] = assistant_message_id
+    return out

@@ -469,27 +469,10 @@ export interface UpdateConversationRequest {
   archived?: boolean
 }
 
-export interface CreateMessageRequest {
+export interface CreateUserMessageRequest {
   client_message_id?: string | null
-  role: 'user' | 'assistant'
   content?: string | null
   mode?: string | null
-  status?: string | null
-  task_type?: string | null
-  routing_model?: string | null
-  actual_model?: string | null
-  rag_used?: boolean | null
-  tools_used?: string | null
-  local_execution?: boolean | null
-  external_calls?: number | null
-  response_time_seconds?: number | null
-  model_inference_seconds?: number | null
-  tokens_per_second?: number | null
-  prompt_tokens?: number | null
-  completion_tokens?: number | null
-  total_tokens?: number | null
-  error_detail?: string | null
-  display_payload?: Record<string, unknown> | null
   attachments?: Array<Record<string, unknown>>
 }
 

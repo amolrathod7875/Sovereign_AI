@@ -23,6 +23,7 @@ from app.storage.postgres import (
 )
 import app.api.conversations as conversations_mod
 import app.storage.postgres as postgres_mod
+from app.conversations.service import persist_assistant_message
 
 # ---------------------------------------------------------------------------
 # Test database setup
@@ -267,7 +268,7 @@ class TestMessages:
             get_messages as api_msgs,
             create_message as api_msg,
         )
-        from app.api.conversations import CreateConversationRequest, CreateMessageRequest
+        from app.api.conversations import CreateConversationRequest, CreateUserMessageRequest
         org_id = str(uuid.uuid4())
         user_id = str(uuid.uuid4())
         _make_org(db_session, org_id)
@@ -278,8 +279,14 @@ class TestMessages:
         p = _principal(user_id, org_id)
         conv = await api_create(CreateConversationRequest(), p)
 
-        await api_msg(conv.id, CreateMessageRequest(role="user", content="Hello"), p)
-        await api_msg(conv.id, CreateMessageRequest(role="assistant", content="Hi there"), p)
+        await api_msg(conv.id, CreateUserMessageRequest(content="Hello"), p)
+        await persist_assistant_message(
+            db_session,
+            conversation_id=conv.id,
+            organization_id=org_id,
+            principal=p,
+            content="Hi there",
+        )
 
         msgs = await api_msgs(conv.id, 100, 0, p)
         assert len(msgs) == 2
@@ -294,7 +301,7 @@ class TestMessages:
             create_conversation as api_create,
             create_message as api_msg,
         )
-        from app.api.conversations import CreateConversationRequest, CreateMessageRequest
+        from app.api.conversations import CreateConversationRequest, CreateUserMessageRequest
         org_id = str(uuid.uuid4())
         user_id = str(uuid.uuid4())
         _make_org(db_session, org_id)
@@ -306,8 +313,8 @@ class TestMessages:
         conv = await api_create(CreateConversationRequest(), p)
 
         cid = "client-123"
-        first = await api_msg(conv.id, CreateMessageRequest(role="user", content="Once", client_message_id=cid), p)
-        second = await api_msg(conv.id, CreateMessageRequest(role="user", content="Twice", client_message_id=cid), p)
+        first = await api_msg(conv.id, CreateUserMessageRequest(content="Once", client_message_id=cid), p)
+        second = await api_msg(conv.id, CreateUserMessageRequest(content="Twice", client_message_id=cid), p)
         assert first.id == second.id
         assert second.content == "Once"  # original content preserved
 
@@ -318,7 +325,7 @@ class TestMessages:
             create_message as api_msg,
             get_conversation as api_get,
         )
-        from app.api.conversations import CreateConversationRequest, CreateMessageRequest
+        from app.api.conversations import CreateConversationRequest, CreateUserMessageRequest
         org_id = str(uuid.uuid4())
         user_id = str(uuid.uuid4())
         _make_org(db_session, org_id)
@@ -329,7 +336,7 @@ class TestMessages:
         p = _principal(user_id, org_id)
         conv = await api_create(CreateConversationRequest(title="New conversation"), p)
         long_text = "What does the inspection report say about R-1001 equipment status?"
-        await api_msg(conv.id, CreateMessageRequest(role="user", content=long_text), p)
+        await api_msg(conv.id, CreateUserMessageRequest(content=long_text), p)
 
         updated = await api_get(conv.id, p)
         assert updated.title.startswith("What does the inspection report say about R-1001")
@@ -341,7 +348,7 @@ class TestMessages:
             create_message as api_msg,
             get_messages as api_msgs,
         )
-        from app.api.conversations import CreateConversationRequest, CreateMessageRequest
+        from app.api.conversations import CreateConversationRequest, CreateUserMessageRequest
         org_id = str(uuid.uuid4())
         user_id = str(uuid.uuid4())
         _make_org(db_session, org_id)
@@ -352,7 +359,7 @@ class TestMessages:
         p = _principal(user_id, org_id)
         conv = await api_create(CreateConversationRequest(), p)
         for i in range(5):
-            await api_msg(conv.id, CreateMessageRequest(role="user", content=f"Msg {i}"), p)
+            await api_msg(conv.id, CreateUserMessageRequest(content=f"Msg {i}"), p)
 
         msgs = await api_msgs(conv.id, 100, 0, p)
         assert [m.sequence_no for m in msgs] == [0, 1, 2, 3, 4]
@@ -364,7 +371,7 @@ class TestMessages:
             create_message as api_msg,
             delete_conversation as api_delete,
         )
-        from app.api.conversations import CreateConversationRequest, CreateMessageRequest
+        from app.api.conversations import CreateConversationRequest, CreateUserMessageRequest
         org_id = str(uuid.uuid4())
         user_id = str(uuid.uuid4())
         _make_org(db_session, org_id)
@@ -374,7 +381,7 @@ class TestMessages:
 
         p = _principal(user_id, org_id)
         conv = await api_create(CreateConversationRequest(), p)
-        await api_msg(conv.id, CreateMessageRequest(role="user", content="Delete me"), p)
+        await api_msg(conv.id, CreateUserMessageRequest(content="Delete me"), p)
         await api_delete(conv.id, p)
 
         count = await db_session.execute(select(Message).where(Message.conversation_id == conv.id))
