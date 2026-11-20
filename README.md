@@ -867,3 +867,11 @@ Before redistributing a packaged build, verify the licenses for every included m
 **Sovereign AI turns confidential industrial evidence into locally generated, provenance-aware, human-governed decisions.**
 
 It does not only present an answer; it is designed to show the asset identity, retrieval evidence, local execution path, tools, human decision, artifact hash, network boundary, receipt, and chain evidence behind that answer.
+## Documentation Contribution
+
+This project welcomes contributions that improve documentation,
+clarify setup instructions, and make technical information easier
+for developers to understand.
+
+Before submitting documentation changes, please ensure that the
+information is consistent with the current implementation.
